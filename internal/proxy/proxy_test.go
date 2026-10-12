@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -1369,4 +1370,366 @@ func TestHTTPActiveOneWayStreaming(t *testing.T) {
 			})
 		})
 	}
+}
+
+type countingConn struct {
+	net.Conn
+	closes atomic.Int32
+}
+
+func (c *countingConn) Close() error { c.closes.Add(1); return c.Conn.Close() }
+
+func TestHTTPKeepAliveReusesActivityTimer(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := New(testLog(), 1, time.Minute)
+		server, limited, l, done := pipeProxy(p)
+		client := pipeClient(l)
+		for i := 0; i < 8; i++ {
+			if i > 0 {
+				time.Sleep(40 * time.Second)
+			}
+			resp, err := pipeRequest(client, "GET", "/invalid")
+			if err != nil {
+				t.Fatal(err)
+			}
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			synctest.Wait()
+			if countSlots(limited) != 1 {
+				t.Fatal("keep-alive slot changed")
+			}
+		}
+		time.Sleep(time.Minute)
+		synctest.Wait()
+		if countSlots(limited) != 0 {
+			t.Fatal("idle keep-alive slot not released")
+		}
+		client.Close()
+		stopPipeProxy(t, p, server, done)
+	})
+}
+
+func TestHTTPIdleRestoredAfterRejectedConnect(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		upstream, origin := net.Pipe()
+		defer origin.Close()
+		p := newProxy(testLog(), func(context.Context, string, string) (net.Conn, error) { return upstream, nil })
+		p.idleTimeout = time.Minute
+		server, limited, l, done := pipeProxy(p)
+		client := pipeClient(l)
+		resp, err := pipeRequest(client, "CONNECT", "example.com:22")
+		if err != nil || resp.StatusCode != 403 {
+			t.Fatalf("%v %v", resp, err)
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		synctest.Wait()
+		ready := make(chan struct{})
+		go func() {
+			req, err := http.ReadRequest(bufio.NewReader(origin))
+			if err != nil {
+				return
+			}
+			req.Body.Close()
+			fmt.Fprint(origin, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n")
+			close(ready)
+			io.Copy(io.Discard, origin)
+		}()
+		resp, err = pipeRequest(client, "GET", "http://example.com/")
+		if err != nil {
+			t.Fatal(err)
+		}
+		b := make([]byte, 1)
+		if _, err = io.ReadFull(resp.Body, b); err != nil {
+			t.Fatal(err)
+		}
+		<-ready
+		synctest.Wait()
+		time.Sleep(time.Minute)
+		synctest.Wait()
+		if countSlots(limited) != 0 {
+			t.Fatal("HTTP timer not resumed after CONNECT rejection")
+		}
+		resp.Body.Close()
+		client.Close()
+		stopPipeProxy(t, p, server, done)
+	})
+}
+
+func TestHTTPActivityDoesNotExtendHeaderDeadline(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := New(testLog(), 1, time.Minute)
+		server, limited, l, done := pipeProxy(p)
+		client := pipeClient(l)
+		// Repeated successful reads keep the activity timer alive, but headers
+		// must still finish within ten seconds.
+		fmt.Fprint(client, "GET ")
+		for i := 0; i < 4; i++ {
+			time.Sleep(2 * time.Second)
+			fmt.Fprint(client, "x")
+		}
+		time.Sleep(2 * time.Second)
+		synctest.Wait()
+		// net/http may send a 400 for an incomplete request line after the
+		// deadline; drain that response so a synchronous net.Pipe write can finish.
+		client.SetReadDeadline(time.Now().Add(time.Second))
+		resp, err := http.ReadResponse(bufio.NewReader(client), nil)
+		if err != nil || resp.StatusCode != 400 {
+			t.Fatalf("header deadline response: %v %v", resp, err)
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		synctest.Wait()
+		if countSlots(limited) != 0 {
+			t.Fatal("activity bypassed ReadHeaderTimeout")
+		}
+		client.Close()
+		stopPipeProxy(t, p, server, done)
+	})
+}
+
+func TestClientIdleStaleCallbacksAndExactlyOnceClose(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := New(testLog(), 1, time.Minute)
+		l := p.Listener(newPipeListener()).(*limitedListener)
+		accepted, peer := net.Pipe()
+		defer peer.Close()
+		underlying := &countingConn{Conn: accepted}
+		c := &clientConn{Conn: underlying, listener: l}
+		p.clients[c] = struct{}{}
+		ctx := c.context(context.Background())
+		c.startIdle()
+		time.Sleep(40 * time.Second)
+		written := make(chan error, 1)
+		go func() { _, err := c.Write([]byte("x")); written <- err }()
+		b := make([]byte, 1)
+		if _, err := peer.Read(b); err != nil {
+			t.Fatal(err)
+		}
+		if err := <-written; err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(20 * time.Second)
+		// Simulate a callback already queued for the original deadline.
+		c.expire()
+		if underlying.closes.Load() != 0 || ctx.Err() != nil {
+			t.Fatal("stale callback closed active connection")
+		}
+		c.stopIdle()
+		time.Sleep(2 * time.Minute)
+		c.expire()
+		if underlying.closes.Load() != 0 {
+			t.Fatal("disabled timer callback closed connection")
+		}
+		c.startIdle()
+		time.Sleep(30 * time.Second)
+		c.expire()
+		if underlying.closes.Load() != 0 {
+			t.Fatal("old callback closed reused timer")
+		}
+		time.Sleep(30 * time.Second)
+		synctest.Wait()
+		if underlying.closes.Load() != 1 || ctx.Err() != context.Canceled || countSlots(l) != 0 {
+			t.Fatal("expiration did not close/cancel/release exactly once")
+		}
+		var wg sync.WaitGroup
+		for i := 0; i < 16; i++ {
+			wg.Add(1)
+			go func() { defer wg.Done(); c.Close(); c.expire(); c.touch(); c.startIdle() }()
+		}
+		wg.Wait()
+		time.Sleep(2 * time.Minute)
+		synctest.Wait()
+		if underlying.closes.Load() != 1 || countSlots(l) != 0 {
+			t.Fatal("closed timer revived connection")
+		}
+		// A stale callback from a previous connection cannot release a new slot.
+		next, other := net.Pipe()
+		defer other.Close()
+		successor := &clientConn{Conn: next, listener: l}
+		p.clients[successor] = struct{}{}
+		c.expire()
+		c.Close()
+		if countSlots(l) != 1 {
+			t.Fatal("old connection released successor slot")
+		}
+		successor.Close()
+	})
+}
+
+func TestConnectHasOnlyTunnelIdleTimer(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		upstream, remote := net.Pipe()
+		defer remote.Close()
+		entered := make(chan struct{})
+		release := make(chan struct{})
+		p := newProxy(testLog(), func(context.Context, string, string) (net.Conn, error) {
+			close(entered)
+			<-release
+			return upstream, nil
+		})
+		p.idleTimeout = time.Second
+		server, limited, l, done := pipeProxy(p)
+		client := pipeClient(l)
+		response := make(chan *http.Response, 1)
+		go func() { resp, _ := pipeRequest(client, "CONNECT", "example.com:443"); response <- resp }()
+		<-entered
+		time.Sleep(2 * time.Second)
+		synctest.Wait()
+		if countSlots(limited) != 1 {
+			t.Fatal("HTTP timer interrupted pending CONNECT")
+		}
+		close(release)
+		resp := <-response
+		if resp == nil || resp.StatusCode != 200 {
+			t.Fatalf("CONNECT: %v", resp)
+		}
+		// The wrapper cannot terminate the quiet inbound direction while data
+		// continues toward upstream. Established CONNECT retains its shared timer.
+		for i := 0; i < 8; i++ {
+			time.Sleep(500 * time.Millisecond)
+			written := make(chan error, 1)
+			go func() { _, err := client.Write([]byte("x")); written <- err }()
+			b := make([]byte, 1)
+			if _, err := remote.Read(b); err != nil {
+				t.Fatal(err)
+			}
+			if err := <-written; err != nil {
+				t.Fatal(err)
+			}
+			synctest.Wait()
+			if countSlots(limited) != 1 {
+				t.Fatal("duplicate timer expired active CONNECT")
+			}
+		}
+		client.Close()
+		remote.Close()
+		synctest.Wait()
+		stopPipeProxy(t, p, server, done)
+	})
+}
+
+func TestHTTPIdleTimeoutConcurrentShutdown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := New(testLog(), 16, time.Second)
+		server, limited, l, done := pipeProxy(p)
+		var clients []net.Conn
+		var accepted []*countingConn
+		for i := 0; i < 16; i++ {
+			client, raw := net.Pipe()
+			counted := &countingConn{Conn: raw}
+			accepted = append(accepted, counted)
+			l.incoming <- counted
+			clients = append(clients, client)
+			resp, err := pipeRequest(client, "GET", "/invalid")
+			if err != nil {
+				t.Fatal(err)
+			}
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
+		synctest.Wait()
+		// Timer expiry, full close, and shutdown all become runnable together.
+		var wg sync.WaitGroup
+		for _, client := range clients {
+			wg.Add(1)
+			go func() { defer wg.Done(); time.Sleep(time.Second); client.Close() }()
+		}
+		stopped := make(chan error, 1)
+		go func() {
+			time.Sleep(time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			stopped <- p.Shutdown(ctx, server)
+		}()
+		time.Sleep(time.Second)
+		wg.Wait()
+		if err := <-stopped; err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		if countSlots(limited) != 0 {
+			t.Fatal("concurrent cleanup retained slots")
+		}
+		for _, c := range accepted {
+			if c.closes.Load() != 1 {
+				t.Fatal("underlying connection closed more than once", c.closes.Load())
+			}
+		}
+		<-done
+	})
+}
+
+func TestActiveHTTPIdleAndForcedShutdownCoincide(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newProxy(testLog(), func(context.Context, string, string) (net.Conn, error) {
+			upstream, origin := net.Pipe()
+			go func() {
+				defer origin.Close()
+				req, err := http.ReadRequest(bufio.NewReader(origin))
+				if err != nil {
+					return
+				}
+				req.Body.Close()
+				fmt.Fprint(origin, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n")
+				io.Copy(io.Discard, origin)
+			}()
+			return upstream, nil
+		})
+		p.idleTimeout = time.Second
+		server, limited, l, done := pipeProxy(p)
+		var clients []net.Conn
+		var responses []*http.Response
+		var accepted []*countingConn
+		for i := 0; i < 8; i++ {
+			client, raw := net.Pipe()
+			counted := &countingConn{Conn: raw}
+			l.incoming <- counted
+			accepted = append(accepted, counted)
+			clients = append(clients, client)
+			resp, err := pipeRequest(client, "GET", "http://example.com/stream")
+			if err != nil {
+				t.Fatal(err)
+			}
+			b := make([]byte, 1)
+			if _, err = io.ReadFull(resp.Body, b); err != nil {
+				t.Fatal(err)
+			}
+			responses = append(responses, resp)
+		}
+		synctest.Wait()
+		start := time.Now()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		err := p.Shutdown(ctx, server)
+		if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatal(err)
+		}
+		if time.Since(start) > time.Second {
+			t.Fatal("cleanup exceeded shutdown budget")
+		}
+		for _, resp := range responses {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
+		for _, client := range clients {
+			client.Close()
+		}
+		synctest.Wait()
+		if countSlots(limited) != 0 {
+			t.Fatal("active streams retained slots")
+		}
+		p.mu.Lock()
+		active := p.active
+		p.mu.Unlock()
+		if active != 0 {
+			t.Fatal("HTTP handlers survived timeout/shutdown")
+		}
+		for _, c := range accepted {
+			if c.closes.Load() != 1 {
+				t.Fatal("duplicate underlying close", c.closes.Load())
+			}
+		}
+		<-done
+	})
 }

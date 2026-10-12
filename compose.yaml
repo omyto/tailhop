@@ -1,0 +1,19 @@
+services:
+  tailhop:
+    build: .
+    restart: unless-stopped
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_HOSTNAME: ${TS_HOSTNAME:-tailhop}
+      TS_STATE_DIR: /var/lib/tailhop
+      PROXY_PORT: ${PROXY_PORT:-8080}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - state:/var/lib/tailhop
+    stop_grace_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+volumes:
+  state:

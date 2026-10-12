@@ -2,86 +2,96 @@
 
 > A tiny forward proxy that lets devices on your Tailnet access the internet through a remote host, powered by tsnet.
 
-**Status:** specification only; implementation is not yet included.
-
-## What it does
-
-tailhop is a small Go HTTP forward proxy that runs as its own [Tailscale](https://tailscale.com/) node using [`tsnet`](https://pkg.go.dev/tailscale.com/tsnet). Tailnet clients explicitly configure tailhop as their HTTP/HTTPS proxy. tailhop accepts these connections through the Tailnet and sends outbound traffic through the container's normal network stack, typically NATed through its Docker host.
+tailhop is a Go HTTP/1.1 forward proxy enrolled as its own Tailscale node. It accepts connections only through tsnet and connects to public destinations through the container's ordinary network stack. Plain HTTP requests stream through a standard HTTP transport; CONNECT tunnels HTTPS or other TCP streams without TLS interception. Ports 80 and 443 are the only permitted destination ports.
 
 ```text
-Client on Tailnet
-    |
-    | HTTP proxy request / HTTPS CONNECT
-    v
-Tailnet --> tsnet listener (:8080)
-                |
-                v
-           Go proxy handler
-                |
-                | regular net.Dialer / HTTP transport
-                v
-        Container default route
-                |
-                v
-       Docker host / upstream NAT
-                |
-                v
-           Public Internet
+Tailnet client -> tsnet.Listen -> HTTP proxy -> net.Dialer -> container default route
 ```
 
-It is **not** a Tailscale Exit Node: only applications configured to use this forward proxy send traffic through it. It does not transparently route a client's entire network connection, and it does not serve as a reverse proxy.
+The MVP includes destination validation, hop-by-hop/proxy credential header removal, streaming uploads and responses, tracked CONNECT tunnels, bounded shutdown, and credential-free tests. [SPEC.md](SPEC.md) remains the implementation contract.
 
-## Planned MVP
+## Docker quick start
 
-- HTTP/1.1 forward proxy for plain `http://` requests.
-- HTTP `CONNECT` tunneling, including HTTPS (without inspecting TLS).
-- Inbound listening **only** through `tsnet.Server.Listen` (no host-published port).
-- Outbound connections through ordinary Go networking (never `tsnet.Dial`).
-- Default-deny destination rules for non-public IP addresses; destination TCP ports limited to 80 and 443 in v1.
-- Environment-based configuration, graceful shutdown, unit tests, and a non-root Docker image.
-
-No SOCKS5, dashboard, authentication database, caching, HTTPS interception, or transparent routing in the MVP.
-
-See [SPEC.md](SPEC.md) for the authoritative behavior and security requirements.
-
-## Intended usage (after implementation)
-
-The implementation will include `Dockerfile` and `compose.yaml`. First start should use a Tailscale auth key, and the `tsnet` state directory should be persisted so that restarts reuse the node identity.
-
-From another device on the same Tailnet (with appropriate Tailnet access controls):
+Install Docker with Compose and provide the container outbound connectivity for Tailscale and internet destinations.
 
 ```sh
-curl --proxy http://tailhop:8080 http://example.com/
-curl --proxy http://tailhop:8080 https://ifconfig.me/ip
+cp .env.example .env
+chmod 600 .env
+# Edit .env: replace TS_AUTHKEY with an enrollment key from your Tailnet.
+docker compose config
+docker compose up --build -d
+docker compose logs -f tailhop
 ```
 
-The hostname `tailhop` assumes that name resolves for your Tailnet (for example, via MagicDNS); otherwise, use the node's Tailscale IP or its actual Tailnet DNS name. A successful public-IP test should report the outbound public IP of the container's network path, **usually** the Docker host's public egress IP—not necessarily its literal interface IP on every network setup.
+Configure Tailnet grants/ACLs to allow only intended clients to reach this node on TCP 8080. Confirm the node appears connected in the Tailscale device view. Enrollment keys must be appropriate for your Tailnet's approval/tag policy. After enrollment, remove TS_AUTHKEY from .env and recreate the container:
 
-## Security model
+```sh
+docker compose up -d --force-recreate
+```
 
-- A Tailnet is the **transport and inbound access boundary**, not unrestricted authorization to access destinations.
-- Configure Tailscale **grants/ACLs** so only trusted clients can reach the tailhop node's proxy TCP port. A permissive Tailnet policy may allow more clients than you expect.
-- The proxy must independently deny loopback, private, link-local, CGNAT, metadata, and other non-public destinations; resolve and validate before each new upstream connection and dial the validated IP directly to prevent DNS rebinding TOCTOU bypasses.
-- Only port 80 or 443 is allowed in the MVP, whether requested with a plain HTTP URL or CONNECT.
-- Treat the Tailscale auth key and persisted state as secrets; do not commit `.env` or state files.
-- Plain HTTP requests are not end-to-end encrypted beyond the Tailnet link. For HTTPS, CONNECT tunnels TLS end-to-end from the client to the origin (the proxy does not decrypt it).
+The named state volume preserves node identity. Do not use `docker compose down -v` unless you intend to delete that identity. Without an auth key, an uninitialized tsnet node may log an interactive enrollment URL. Treat that URL and persisted state as secrets. Automated deployments should supply a key.
+
+The image runs as UID/GID **10001:10001** from its first application start. Its state directory is pre-created with ownership 10001:10001 and mode 0700; Docker copies those permissions into a new, empty named volume. Keep Docker's default volume copy-up enabled. Existing volumes must already have that ownership. For a host bind mount, prepare it explicitly before running:
+
+```sh
+sudo install -d -m 0700 -o 10001 -g 10001 ./state
+```
+
+The application verifies state writability and fails early on incorrect permissions. No TUN device, NET_ADMIN, privileged mode, host networking, or published port is used. Compose drops all capabilities and sets no-new-privileges. SIGTERM/SIGINT stop HTTP acceptance and allow requests and tunnels to drain for up to ten seconds, then force-close remaining connections; Compose allows twenty seconds for proxy drain and tsnet cleanup before forced termination.
+
+## Verify from a Tailnet client
+
+Use MagicDNS, the actual node DNS name, or its Tailscale IP. Force curl to use the proxy even if the client has NO_PROXY configured:
+
+```sh
+curl --noproxy '' --proxy http://tailhop:8080 http://example.com/
+curl --noproxy '' --proxy http://tailhop:8080 https://ifconfig.me/ip
+
+# Expected: HTTP 403
+curl --noproxy '' -i --proxy http://tailhop:8080 http://127.0.0.1/
+curl --noproxy '' -i --proxy http://tailhop:8080 http://169.254.169.254/
+curl --noproxy '' -i --proxy http://tailhop:8080 http://example.com:22/
+```
+
+The IP service should show the actual **container egress path**, usually Docker host/upstream NAT, which can differ with VPNs, routing policy, or cloud networking. Compare it with the client's direct public IP. Restart without an enrollment key and confirm the same node identity survives; run `docker compose down` and confirm clean termination.
+
+## Configuration
+
+Only environment variables are supported:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| TS_AUTHKEY | unset | Initial enrollment; unnecessary with enrolled state |
+| TS_HOSTNAME | tailhop | Node hostname (DNS label) |
+| TS_STATE_DIR | /var/lib/tailhop | Persistent, private, writable state directory |
+| PROXY_PORT | 8080 | Tailnet listener TCP port, 1–65535 |
+| LOG_LEVEL | info | debug, info, warn, or error |
+
+Do not commit .env or state. Application logs contain methods, validated hostnames, status and duration, never request bodies, URL queries or proxy credentials. Verbose tsnet backend output is suppressed; tsnet user status/enrollment messages use structured logging. Tailscale's library also manages its own operational log uploads.
+
+## Security and limitations
+
+Tailnet access controls are the inbound authorization boundary; there is no additional user/password authentication or per-client quota. Restrict access to trusted clients. Like any forward proxy, this service can consume bandwidth and connections, so apply deployment resource limits and egress firewall rules appropriate to your environment.
+
+Every new upstream TCP connection resolves under a ten-second DNS/dial budget, filters the answers, and dials a vetted **numeric IP**. HTTP connection reuse stays pinned to the already vetted peer. Mixed DNS answers use only allowed candidates, sequentially. No environment HTTP_PROXY/HTTPS_PROXY is used for proxied egress.
+
+The policy unmaps IPv4-mapped IPv6 before classification and blocks loopback, private, link-local, CGNAT, metadata, multicast, documentation, benchmarking and reserved space. It conservatively excludes IPv6 transition space and accepts IPv6 only within 2000::/3 minus special-purpose exclusions. Special-use public exceptions within excluded prefixes are deliberately denied. Prefix decisions are based on the [IANA IPv4](https://www.iana.org/assignments/iana-ipv4-special-registry/) and [IPv6](https://www.iana.org/assignments/iana-ipv6-special-registry/) registries; review them when upgrading. IP classification cannot compensate for an environment that routes nominally public addresses to sensitive internal services.
+
+Only absolute-form http:// requests are accepted; use CONNECT for HTTPS. Redirects are returned to the client. Host is normalized from the target URL. Hop-by-hop headers and trailers are stripped; trailers are not forwarded. Long-lived streams have no blanket body/tunnel timeout. Automatic upstream decompression is disabled to preserve content encoding. Upstream response headers have a 32 KiB bound and a thirty-second timeout, client headers ten seconds and a 32 KiB bound; upstream idle connections are bounded and expire after sixty seconds.
+
+Plain HTTP remains unencrypted on the internet side. CONNECT preserves the client's end-to-end TLS without inspecting it. TCP protocols on 80/443 can be tunneled; this is not an HTTP-only content filter. No SOCKS, HTTP/2 CONNECT, Upgrade/WebSockets, reverse proxy, dashboard, private-subnet access, caching, or whole-device exit-node routing is implemented.
 
 ## Development
 
-After the implementation is generated:
+The module requires Go 1.27.1 (matching the mise toolchain and Tailscale requirement); the Docker builder uses Go 1.27.2. tailscale.com v1.104.1 is pinned. Tests use only injected resolvers/dialers and test-local connections; no Tailnet credentials or internet are needed after dependency download.
 
 ```sh
 gofmt -w ./cmd ./internal
 go vet ./...
 go test ./...
 go test -race ./...
+docker compose config
+docker build .
 ```
 
-`go test -race` may be limited by the build environment; its result should be reported separately. Unit tests should not require actual Tailscale credentials or internet access.
-
-## Reference documentation
-
-- [Tailscale: tsnet basics](https://tailscale.com/docs/features/tsnet/how-to/create-basic-tsnet-app)
-- [Tailscale: tsnet.Server API](https://tailscale.com/docs/reference/tsnet-server-api)
-- [Go: net/http](https://pkg.go.dev/net/http)
-- [Go: net/netip](https://pkg.go.dev/net/netip)
+Docker image construction and first-run volume permissions must be checked on a host with daemon access. Real enrollment, Tailnet ACL enforcement, observed egress IP, persisted identity and signal shutdown require the manual smoke tests above.

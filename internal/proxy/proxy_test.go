@@ -1211,3 +1211,162 @@ func TestHTTPDialCanceledOnClientDisconnect(t *testing.T) {
 		}
 	})
 }
+
+func TestHTTPStalledStreamingIdleTimeout(t *testing.T) {
+	for _, mode := range []string{"request_body", "response_body", "response_with_unfinished_upload"} {
+		t.Run(mode, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				upstream, origin := net.Pipe()
+				defer origin.Close()
+				ready := make(chan struct{})
+				originDone := make(chan struct{})
+				p := newProxy(testLog(), func(context.Context, string, string) (net.Conn, error) { return upstream, nil })
+				p.idleTimeout = time.Minute
+				server, limited, l, done := pipeProxy(p)
+				client := pipeClient(l)
+				go func() {
+					defer close(originDone)
+					req, err := http.ReadRequest(bufio.NewReader(origin))
+					if err != nil {
+						return
+					}
+					if mode == "request_body" {
+						b := make([]byte, 1)
+						io.ReadFull(req.Body, b)
+						close(ready)
+						io.Copy(io.Discard, req.Body)
+					} else {
+						if mode == "response_with_unfinished_upload" {
+							b := make([]byte, 1)
+							io.ReadFull(req.Body, b)
+						}
+						fmt.Fprint(origin, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n")
+						close(ready)
+						io.Copy(io.Discard, origin)
+					}
+				}()
+				if mode == "request_body" {
+					fmt.Fprint(client, "POST http://example.com/ HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n")
+				} else {
+					if mode == "response_with_unfinished_upload" {
+						go fmt.Fprint(client, "POST http://example.com/ HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n")
+					} else {
+						go fmt.Fprint(client, "GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n")
+					}
+					resp, err := http.ReadResponse(bufio.NewReader(client), nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					b := make([]byte, 1)
+					if _, err = io.ReadFull(resp.Body, b); err != nil {
+						t.Fatal(err)
+					}
+					defer resp.Body.Close()
+				}
+				<-ready
+				synctest.Wait()
+				time.Sleep(time.Minute)
+				synctest.Wait()
+				if countSlots(limited) != 0 {
+					t.Fatal("idle stream retained slot")
+				}
+				p.mu.Lock()
+				active := p.active
+				p.mu.Unlock()
+				if active != 0 {
+					t.Fatal("idle stream handler not canceled")
+				}
+				<-originDone
+				client.Close()
+				// Let net/http finish its bounded RST-avoidance delay using fake time.
+				time.Sleep(time.Second)
+				synctest.Wait()
+				stopPipeProxy(t, p, server, done)
+			})
+		})
+	}
+}
+
+func TestHTTPActiveOneWayStreaming(t *testing.T) {
+	for _, direction := range []string{"upload", "download"} {
+		t.Run(direction, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				upstream, origin := net.Pipe()
+				defer origin.Close()
+				request := make(chan *http.Request, 1)
+				p := newProxy(testLog(), func(context.Context, string, string) (net.Conn, error) { return upstream, nil })
+				p.idleTimeout = time.Minute
+				server, limited, l, done := pipeProxy(p)
+				client := pipeClient(l)
+				go func() {
+					req, err := http.ReadRequest(bufio.NewReader(origin))
+					if err == nil {
+						request <- req
+					}
+				}()
+				if direction == "upload" {
+					fmt.Fprint(client, "POST http://example.com/ HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n")
+					req := <-request
+					for i := 0; i < 8; i++ {
+						time.Sleep(30 * time.Second)
+						written := make(chan error, 1)
+						go func() { _, err := fmt.Fprint(client, "1\r\nx\r\n"); written <- err }()
+						b := make([]byte, 1)
+						if _, err := io.ReadFull(req.Body, b); err != nil {
+							t.Fatal(err)
+						}
+						if err := <-written; err != nil {
+							t.Fatal(err)
+						}
+						synctest.Wait()
+						if countSlots(limited) != 1 {
+							t.Fatal("active upload expired")
+						}
+					}
+					go fmt.Fprint(client, "0\r\n\r\n")
+					io.Copy(io.Discard, req.Body)
+					req.Body.Close()
+					go fmt.Fprint(origin, "HTTP/1.1 204 No Content\r\n\r\n")
+					resp, err := http.ReadResponse(bufio.NewReader(client), nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					resp.Body.Close()
+				} else {
+					go fmt.Fprint(client, "GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n")
+					req := <-request
+					req.Body.Close()
+					go fmt.Fprint(origin, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")
+					resp, err := http.ReadResponse(bufio.NewReader(client), nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for i := 0; i < 8; i++ {
+						time.Sleep(30 * time.Second)
+						written := make(chan error, 1)
+						go func() { _, err := fmt.Fprint(origin, "1\r\nx\r\n"); written <- err }()
+						b := make([]byte, 1)
+						if _, err := io.ReadFull(resp.Body, b); err != nil {
+							t.Fatal(err)
+						}
+						if err := <-written; err != nil {
+							t.Fatal(err)
+						}
+						synctest.Wait()
+						if countSlots(limited) != 1 {
+							t.Fatal("active download expired")
+						}
+					}
+					go fmt.Fprint(origin, "0\r\n\r\n")
+					if _, err := io.ReadAll(resp.Body); err != nil {
+						t.Fatal(err)
+					}
+					resp.Body.Close()
+				}
+				client.Close()
+				synctest.Wait()
+				stopPipeProxy(t, p, server, done)
+			})
+		})
+	}
+}

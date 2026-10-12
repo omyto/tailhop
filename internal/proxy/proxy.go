@@ -170,7 +170,25 @@ func stopContext(parent, stopping context.Context) (context.Context, context.Can
 	return ctx, cancel, stop
 }
 func (p *Proxy) Server() *http.Server {
-	return &http.Server{Handler: p, ReadHeaderTimeout: 10 * time.Second, MaxHeaderBytes: 32 << 10, IdleTimeout: p.idleTimeout}
+	return &http.Server{
+		Handler: p, ReadHeaderTimeout: 10 * time.Second, MaxHeaderBytes: 32 << 10, IdleTimeout: p.idleTimeout,
+		ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
+			if c, ok := conn.(*clientConn); ok {
+				return c.context(ctx)
+			}
+			return ctx
+		},
+		ConnState: func(conn net.Conn, state http.ConnState) {
+			if c, ok := conn.(*clientConn); ok {
+				switch state {
+				case http.StateHijacked:
+					c.stopIdle()
+				case http.StateIdle:
+					c.startIdle() // Resume HTTP after an unsuccessful CONNECT.
+				}
+			}
+		},
+	}
 }
 func strip(h http.Header) {
 	for _, v := range h.Values("Connection") {
@@ -222,6 +240,11 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodConnect {
+		// Pending CONNECT dials retain their existing bounded cancellation policy.
+		// Once hijacked, only the established tunnel's shared timer owns inactivity.
+		if c, ok := r.Context().Value(clientConnKey{}).(*clientConn); ok {
+			c.stopIdle()
+		}
 		p.connect(w, r)
 		return
 	}

@@ -66,7 +66,7 @@ All outbound TCP dials for both CONNECT and ordinary HTTP **must** call a single
 4. Reject loopback, private, link-local, unspecified, multicast, CGNAT (`100.64.0.0/10`), broadcast, documentation, benchmarking, reserved/special-purpose, and other known non-public ranges for both IPv4 and IPv6, including IPv4-mapped IPv6 by normalizing with `Unmap`. Deny cloud instance metadata endpoints (including `169.254.169.254`) as a consequence of the IP policy. Fail closed for addresses that cannot be confidently classified.
 5. **Do not rely on `netip.Addr.IsGlobalUnicast()` alone**: it reports true for some private/special-use addresses. Use explicit address-classification checks and documented reserved-prefix exclusions, covered by tests.
 6. The policy must apply at **connection time**, including any newly opened pooled HTTP transport connection. No user-configurable policy bypass for the MVP.
-7. If multiple IPs resolve, dial only allowed candidates. Timeouts/cancellations must be respected and connections closed on failure.
+7. If multiple IPs resolve, filter and deduplicate candidates, then alternate IPv4/IPv6 while preserving resolver order within each family. Dial sequentially under one overall ten-second DNS/dial deadline. Give each non-final attempt at most two seconds and at most its fair share of the remaining time, reserving fallback opportunity; give the final attempt the remaining budget. No parallel connection races or hostname re-resolution. Respect cancellation and close connections returned on failure or after cancellation.
 
 The scope is public-internet egress only. Do not introduce a private-subnet allowlist in v1.
 
@@ -81,6 +81,8 @@ Use only environment variables. Validate configuration early; report useful erro
 | `TS_STATE_DIR` | `/var/lib/tailhop` | Directory passed to `tsnet.Server.Dir`; create if needed with secure permissions and ensure writable as container UID. Persist in Docker. |
 | `PROXY_PORT` | `8080` | Tailnet-only listening TCP port, valid 1–65535. |
 | `LOG_LEVEL` | `info` | One of `debug`, `info`, `warn`, `error`. |
+| `MAX_CLIENTS` | `100` | Positive integer; global simultaneous inbound TCP connection limit, not per IP. |
+| `IDLE_TIMEOUT` | `10m` | Positive Go duration; idle HTTP keep-alive and shared CONNECT inactivity. |
 
 Use `tsnet.Server.Listen("tcp", fmt.Sprintf(":%d", port))`; don't bind `0.0.0.0` on the Docker host. Do not require `TS_AUTHKEY` on every restart. For an uninitialized node without a key, document that `tsnet` may output an interactive enrollment URL; automated deployment should set an auth key. Do not set the tsnet node to ephemeral when relying on persisted identity.
 
@@ -88,9 +90,14 @@ Use `tsnet.Server.Listen("tcp", fmt.Sprintf(":%d", port))`; don't bind `0.0.0.0`
 
 - Use reasonable concrete defaults: `ReadHeaderTimeout` ~10s, a bounded header size (e.g. 32 KiB), DNS lookup/dial timeout ~10s, TLS/upstream timeout where applicable. Define these as internal constants unless configuration is necessary for correctness.
 - Do not set `http.Server.ReadTimeout`/`WriteTimeout` globally in a way that breaks HTTP streaming or CONNECT tunnels. Do not buffer whole requests/responses.
+- Enforce MAX_CLIENTS at the listener boundary: count all admitted TCP connections, including keep-alive, active HTTP, pending CONNECT DNS/dials, and hijacked tunnels. Immediately close excess sockets without an HTTP response, queue, or rejection goroutine. Only full connection close releases its slot, exactly once; preserve TCP half-close capabilities.
+- Use IDLE_TIMEOUT for HTTP keep-alive and one shared CONNECT inactivity timer. Successful forwarded writes in either direction reset the tunnel timer; uninterrupted one-way traffic must survive. On inactivity expiration close both peers. Do not add a monitoring goroutine per connection.
+- Active HTTP body streaming has no inactivity/absolute deadline; this differs from Tinyproxy's broader connection timeout. A stalled HTTP body can hold a slot until disconnect or forced shutdown. Limits are global, without per-IP quotas or fairness; one client may consume all slots. Document restrictive Tailnet grants/ACLs and deployment resource limits.
 - Bound idle upstream HTTP connection count and idle time. Close idle transport connections on shutdown.
-- Start serving with `http.Server.Serve` on the `tsnet` listener. Close listener and server, drain then terminate tracked tunnels, and close `tsnet.Server` in a predictable order without hanging.
-- Exclude stack traces, request bodies, auth keys, and full destination URLs from ordinary logs. Logging only status, method, duration and destination hostname (no query) is sufficient.
+- Start serving with `http.Server.Serve` on the admission-wrapped `tsnet` listener. Shutdown stops admission and cancels pending CONNECT DNS/dials immediately. Existing HTTP streams and tracked tunnels share a bounded graceful drain period; at the deadline cancel outbound HTTP operations, close server/client/tunnel connections, and do not wait beyond the budget. Observe handler completion within the budget. Never hold the proxy mutex while closing network connections. Prevent tunnel registration after shutdown starts. Close `tsnet.Server` after proxy cleanup.
+- Unexpected listener errors must retain useful error context in structured logs and returned errors.
+- Preserve immediate response flushing per write unless benchmarks and streaming tests demonstrate a better alternative.
+- Exclude stack traces, request bodies, auth keys, and full destination URLs from ordinary logs. Log status, method, duration, validated destination hostname (no query), and the trusted source IP from r.RemoteAddr. Log blocked/failed requests and admission rejections without raw upstream error strings or forwarding-header identity. Do not add per-request WhoIs lookups.
 - Avoid clever abstractions and hidden goroutine lifetimes. The implementation should be easy to audit.
 
 ## 7. Repository layout (target, not a framework)
@@ -119,6 +126,7 @@ Add at most one small extra internal Go file if it materially improves clarity. 
 - Run as **non-root**. State mount target `/var/lib/tailhop` must be writeable by the runtime UID. If using a named volume, include reliable first-run permissions handling without starting the app as root; explain host bind-mount ownership requirements.
 - Compose example must use a persistent named volume for state, set `TS_STATE_DIR`, and pass `TS_AUTHKEY` through the environment (recommend `.env` local file; never hardcode a key).
 - Do not include `ports:`, `network_mode: host`, `privileged: true`, `cap_add`, or `/dev/net/tun`.
+- Validate Compose with `docker compose config --quiet` to avoid printing TS_AUTHKEY.
 - Support clean `docker compose down` / SIGTERM. Provide `.env.example` with placeholders (not real secrets) and `.dockerignore`.
 - Document expected default Docker bridge NAT behavior and caveats about the observed public egress IP.
 
@@ -132,15 +140,20 @@ Minimum coverage:
 - CONNECT: handshake **after** successful dial, bidirectional bytes, early buffered bytes, remote/client EOF and half-close, failed dial, malformed authority, port denial, tunnel cleanup on shutdown.
 - Policy: public IPv4/IPv6 allowed; blocked loopback (`127.0.0.1`, `::1`), RFC1918, IPv6 ULA, link-local, CGNAT `100.64.0.1`, metadata `169.254.169.254`, benchmarking/doc ranges, IPv4-mapped IPv6; mixed DNS answers; DNS failure; rebinding case where DNS would change between resolution and dial; timeout/cancellation.
 - Shutdown: requests stop being accepted and active CONNECT tunnels are terminated within the configured shutdown budget.
+- Admission: global connection cap, idle keep-alive, pending CONNECT slot consumption, prompt rejection, concurrent access and exactly-once capacity recovery on close/error/timeout/hijack/shutdown. Preserve half-close through wrappers.
+- Inactivity: idle HTTP and CONNECT closure, shared activity in either tunnel direction, continuous one-way transfers, deterministic clock-based tests.
+- Shutdown: active HTTP downloads/uploads, pending outbound cancellation, graceful stream completion, late CONNECT dial results closed without registering tunnels, forced tunnel cleanup and released slots.
+- Fallback: stalled first IPv6/IPv4 candidate, working other-family fallback, bounded overall deadline, cancellation, blocked filtering and late-connection cleanup.
+- Logging: trusted source IP for HTTP/CONNECT/rejections, no client-supplied identity or secrets.
 - Parallel-safe concurrent requests/tunnels; no nondeterministic sleeps where synchronization can be used.
 
 Run and report:
 
 ```sh
-gofmt -w ./cmd ./internal
-go vet ./...
-go test ./...
-go test -race ./...
+mise exec -- gofmt -w ./cmd ./internal
+mise exec -- go vet ./...
+mise exec -- go test ./...
+mise exec -- go test -race ./...
 ```
 
 If dependency downloading, Docker, race instrumentation, or another environment constraint prevents a check, report it transparently; do not claim it passed. No real Tailnet test is mandatory in automated unit tests.

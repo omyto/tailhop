@@ -103,7 +103,7 @@ func authority(a string, defaultPort bool) (string, string, error) {
 		return "", "", ErrTarget
 	}
 	if n != 80 && n != 443 {
-		return "", "", ErrBlocked
+		return host, strconv.Itoa(n), ErrBlocked
 	}
 	return host, strconv.Itoa(n), nil
 }
@@ -118,7 +118,7 @@ type policyDialer struct {
 
 func newPolicyDialer() *policyDialer {
 	d := &net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}
-	return &policyDialer{net.DefaultResolver, d.DialContext}
+	return &policyDialer{resolver: net.DefaultResolver, dial: d.DialContext}
 }
 func (d *policyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	host, port, err := authority(address, false)
@@ -136,22 +136,78 @@ func (d *policyDialer) DialContext(ctx context.Context, network, address string)
 			return nil, err
 		}
 	}
-	err = ErrBlocked
-	for _, ip := range ips {
-		if !publicIP(ip) {
-			continue
-		}
+	// Filter and alternate families before attempting any connection.
+	candidates := dialCandidates(ips)
+	if len(candidates) == 0 {
+		return nil, ErrBlocked
+	}
+	for i, ip := range candidates {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		var c net.Conn
-		c, err = d.dial(ctx, "tcp", net.JoinHostPort(ip.Unmap().String(), port))
-		if err == nil {
+		deadline, _ := ctx.Deadline()
+		budget := time.Until(deadline)
+		if i+1 < len(candidates) {
+			budget /= time.Duration(len(candidates) - i)
+			if budget > 2*time.Second {
+				budget = 2 * time.Second
+			}
+		}
+		attempt, stop := context.WithTimeout(ctx, budget)
+		c, dialErr := d.dial(attempt, "tcp", net.JoinHostPort(ip.String(), port))
+		if attempt.Err() != nil {
+			dialErr = attempt.Err()
+		}
+		stop()
+		if dialErr == nil {
 			return c, nil
 		}
 		if c != nil {
 			c.Close()
 		}
+		err = dialErr
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 	return nil, err
+}
+
+// Keep resolver order within each family, but try the other family next. No
+// racing dials or extra goroutines are needed. Normalize and deduplicate first.
+func dialCandidates(ips []netip.Addr) []netip.Addr {
+	var families [2][]netip.Addr
+	seen := make(map[netip.Addr]bool)
+	first := -1
+	for _, ip := range ips {
+		if !publicIP(ip) {
+			continue
+		}
+		ip = ip.Unmap()
+		if seen[ip] {
+			continue
+		}
+		seen[ip] = true
+		family := 0
+		if ip.Is6() {
+			family = 1
+		}
+		if first < 0 {
+			first = family
+		}
+		families[family] = append(families[family], ip)
+	}
+	var out []netip.Addr
+	if first < 0 {
+		return out
+	}
+	for len(families[0])+len(families[1]) > 0 {
+		for _, family := range []int{first, 1 - first} {
+			if len(families[family]) > 0 {
+				out = append(out, families[family][0])
+				families[family] = families[family][1:]
+			}
+		}
+	}
+	return out
 }

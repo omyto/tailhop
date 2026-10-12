@@ -8,6 +8,8 @@ services:
       TS_STATE_DIR: /var/lib/tailhop
       PROXY_PORT: ${PROXY_PORT:-8080}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      MAX_CLIENTS: ${MAX_CLIENTS:-100}
+      IDLE_TIMEOUT: ${IDLE_TIMEOUT:-10m}
     volumes:
       - state:/var/lib/tailhop
     stop_grace_period: 20s

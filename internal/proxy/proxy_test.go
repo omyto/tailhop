@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -28,13 +30,29 @@ func originProxy(t *testing.T, h http.Handler) (*Proxy, *httptest.Server, *http.
 		}
 		return (&net.Dialer{}).DialContext(ctx, "tcp", strings.TrimPrefix(origin.URL, "http://"))
 	})
-	server := httptest.NewServer(p)
+	server := proxyServer(t, p)
 	t.Cleanup(server.Close)
 	t.Cleanup(p.transport.CloseIdleConnections)
 	u, _ := url.Parse(server.URL)
 	tr := &http.Transport{Proxy: http.ProxyURL(u)}
 	t.Cleanup(tr.CloseIdleConnections)
 	return p, server, &http.Client{Transport: tr, Timeout: 3 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
+// All integration tests use the production admission wrapper and server defaults.
+func proxyServer(t *testing.T, p *Proxy) *httptest.Server {
+	t.Helper()
+	s := httptest.NewUnstartedServer(p)
+	s.Config = p.Server()
+	s.Listener = p.Listener(s.Listener)
+	s.Start()
+	return s
+}
+func slots(s *httptest.Server) int {
+	l := s.Listener.(*limitedListener)
+	l.p.mu.Lock()
+	defer l.p.mu.Unlock()
+	return len(l.p.clients)
 }
 func TestForward(t *testing.T) {
 	t.Setenv("HTTP_PROXY", "http://127.0.0.1:1")
@@ -162,7 +180,7 @@ func TestErrors(t *testing.T) {
 	}{
 		{"/origin", 400}, {"https://example.com/", 400}, {"http://user:pass@example.com/", 400}, {"http://example.com:22/", 403}, {"http://example.com:/", 400},
 	} {
-		p := New(testLog())
+		p := New(testLog(), 100, 10*time.Minute)
 		r := httptest.NewRequest("GET", tc.target, nil)
 		w := httptest.NewRecorder()
 		p.ServeHTTP(w, r)
@@ -189,7 +207,7 @@ func TestErrors(t *testing.T) {
 		}
 	}
 	for _, a := range []string{"example.com", "example.com:abc", "::1:443", "example.com:22"} {
-		p := New(testLog())
+		p := New(testLog(), 100, 10*time.Minute)
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest("CONNECT", "example.com:443", nil)
 		r.RequestURI = a
@@ -244,7 +262,7 @@ func TestConnectBufferedHalfClose(t *testing.T) {
 		t.Run(fmt.Sprint(remoteFirst), func(t *testing.T) {
 			upstream, remote := tcpPair(t)
 			p := newProxy(testLog(), func(context.Context, string, string) (net.Conn, error) { return upstream, nil })
-			server := httptest.NewServer(p)
+			server := proxyServer(t, p)
 			defer server.Close()
 			c, r := connectClient(t, strings.TrimPrefix(server.URL, "http://"), "early")
 			handshake(t, r)
@@ -297,7 +315,7 @@ func TestConnectDialBeforeHandshake(t *testing.T) {
 		<-release
 		return upstream, nil
 	})
-	s := httptest.NewServer(p)
+	s := proxyServer(t, p)
 	defer s.Close()
 	c, r := connectClient(t, strings.TrimPrefix(s.URL, "http://"), "")
 	<-entered
@@ -322,7 +340,7 @@ func TestConcurrentShutdown(t *testing.T) {
 		go func() { defer b.Close(); io.Copy(b, b) }()
 		return a, nil
 	})
-	s := httptest.NewServer(p)
+	s := proxyServer(t, p)
 	defer s.Close()
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
@@ -413,7 +431,7 @@ func TestConcurrentForward(t *testing.T) {
 	wg.Wait()
 }
 func TestBlockedAtDialBoundary(t *testing.T) {
-	p := New(testLog())
+	p := New(testLog(), 100, 10*time.Minute)
 	for _, method := range []string{"GET", "CONNECT"} {
 		for _, host := range []string{"127.0.0.1", "100.64.0.1", "169.254.169.254", "[::ffff:127.0.0.1]", "[fc00::1]"} {
 			target := "http://" + host + "/"
@@ -431,7 +449,7 @@ func TestBlockedAtDialBoundary(t *testing.T) {
 func TestConnectFallbackEOF(t *testing.T) {
 	a, b := net.Pipe()
 	p := newProxy(testLog(), func(context.Context, string, string) (net.Conn, error) { return a, nil })
-	s := httptest.NewServer(p)
+	s := proxyServer(t, p)
 	defer s.Close()
 	c, r := connectClient(t, strings.TrimPrefix(s.URL, "http://"), "")
 	handshake(t, r)
@@ -520,4 +538,676 @@ func TestEarlyResponseHeaders(t *testing.T) {
 	if e != nil || string(b) != "done" {
 		t.Fatalf("%q %v", b, e)
 	}
+}
+
+// A channel listener and net.Pipe make timer/lifecycle tests deterministic with
+// synctest's fake clock. No sleeps on wall-clock time or Tailnet are required.
+type pipeListener struct {
+	incoming chan net.Conn
+	closed   chan struct{}
+	once     sync.Once
+}
+
+func newPipeListener() *pipeListener {
+	return &pipeListener{incoming: make(chan net.Conn), closed: make(chan struct{})}
+}
+func (l *pipeListener) Accept() (net.Conn, error) {
+	select {
+	case c := <-l.incoming:
+		return c, nil
+	case <-l.closed:
+		return nil, net.ErrClosed
+	}
+}
+func (l *pipeListener) Close() error   { l.once.Do(func() { close(l.closed) }); return nil }
+func (l *pipeListener) Addr() net.Addr { return &net.TCPAddr{IP: net.IPv4(100, 64, 0, 1), Port: 8080} }
+func pipeClient(l *pipeListener) net.Conn {
+	client, server := net.Pipe()
+	l.incoming <- server
+	return client
+}
+func pipeProxy(p *Proxy) (*http.Server, *limitedListener, *pipeListener, <-chan error) {
+	l := newPipeListener()
+	limited := p.Listener(l).(*limitedListener)
+	server := p.Server()
+	done := make(chan error, 1)
+	go func() { done <- server.Serve(limited) }()
+	return server, limited, l, done
+}
+func countSlots(l *limitedListener) int {
+	l.p.mu.Lock()
+	defer l.p.mu.Unlock()
+	return len(l.p.clients)
+}
+func pipeRequest(c net.Conn, method, target string) (*http.Response, error) {
+	fmt.Fprintf(c, "%s %s HTTP/1.1\r\nHost: example.com\r\n\r\n", method, target)
+	return http.ReadResponse(bufio.NewReader(c), &http.Request{Method: method})
+}
+func stopPipeProxy(t *testing.T, p *Proxy, s *http.Server, done <-chan error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := p.Shutdown(ctx, s); err != nil {
+		t.Error(err)
+	}
+	if err := <-done; !errors.Is(err, http.ErrServerClosed) {
+		t.Error(err)
+	}
+}
+
+func TestAdmissionKeepAliveAndIdle(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := New(testLog(), 1, time.Minute)
+		server, limited, l, done := pipeProxy(p)
+		c := pipeClient(l)
+		resp, err := pipeRequest(c, "GET", "/invalid")
+		if err != nil || resp.StatusCode != 400 {
+			t.Fatalf("%v %v", resp, err)
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		synctest.Wait()
+		if countSlots(limited) != 1 {
+			t.Fatal("idle keep-alive lost capacity")
+		}
+		excess := pipeClient(l)
+		if _, err := excess.Read(make([]byte, 1)); err != io.EOF {
+			t.Fatalf("excess connection not closed: %v", err)
+		}
+		excess.Close()
+		if countSlots(limited) != 1 {
+			t.Fatal("rejection changed active capacity")
+		}
+		// Expiration closes the socket and restores capacity.
+		time.Sleep(time.Minute)
+		synctest.Wait()
+		if countSlots(limited) != 0 {
+			t.Fatal("idle HTTP slot leaked")
+		}
+		c.Close()
+		next := pipeClient(l)
+		resp, err = pipeRequest(next, "GET", "/invalid")
+		if err != nil {
+			t.Fatal(err)
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		next.Close()
+		synctest.Wait()
+		if countSlots(limited) != 0 {
+			t.Fatal("client close slot leaked")
+		}
+		stopPipeProxy(t, p, server, done)
+	})
+}
+
+func TestPendingConnectAdmissionAndShutdown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		entered := make(chan struct{})
+		canceled := make(chan struct{})
+		p := newProxy(testLog(), func(ctx context.Context, _, _ string) (net.Conn, error) {
+			close(entered)
+			<-ctx.Done()
+			close(canceled)
+			return nil, ctx.Err()
+		})
+		p.maxClients = 1
+		server, limited, l, done := pipeProxy(p)
+		c := pipeClient(l)
+		response := make(chan *http.Response, 1)
+		go func() { resp, _ := pipeRequest(c, "CONNECT", "example.com:443"); response <- resp }()
+		<-entered
+		if countSlots(limited) != 1 {
+			t.Fatal("pending CONNECT was not counted")
+		}
+		excess := pipeClient(l)
+		if _, err := excess.Read(make([]byte, 1)); err != io.EOF {
+			t.Fatalf("excess: %v", err)
+		}
+		excess.Close()
+		shutdown := make(chan error, 1)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		go func() { shutdown <- p.Shutdown(ctx, server) }()
+		<-canceled
+		resp := <-response
+		if resp == nil || resp.StatusCode != 503 {
+			t.Fatalf("pending shutdown: %v", resp)
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		if err := <-shutdown; err != nil {
+			t.Fatal(err)
+		}
+		c.Close()
+		synctest.Wait()
+		if countSlots(limited) != 0 {
+			t.Fatal("pending CONNECT slot leaked")
+		}
+		p.mu.Lock()
+		n := len(p.tunnels)
+		p.mu.Unlock()
+		if n != 0 {
+			t.Fatal("late tunnel registered")
+		}
+		<-done
+	})
+}
+
+func TestConnectSharedIdleAndOneWayActivity(t *testing.T) {
+	for _, direction := range []string{"upload", "download", "idle"} {
+		t.Run(direction, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				upstream, remote := net.Pipe()
+				defer remote.Close()
+				p := newProxy(testLog(), func(context.Context, string, string) (net.Conn, error) { return upstream, nil })
+				p.idleTimeout = time.Minute
+				server, limited, l, done := pipeProxy(p)
+				client := pipeClient(l)
+				response := make(chan *http.Response, 1)
+				go func() { resp, _ := pipeRequest(client, "CONNECT", "example.com:443"); response <- resp }()
+				resp := <-response
+				if resp == nil || resp.StatusCode != 200 {
+					t.Fatalf("CONNECT: %v", resp)
+				}
+				synctest.Wait()
+				if direction != "idle" {
+					src, dst := client, remote
+					if direction == "download" {
+						src, dst = remote, client
+					}
+					for i := 0; i < 8; i++ {
+						time.Sleep(30 * time.Second)
+						written := make(chan error, 1)
+						go func() { _, err := src.Write([]byte("x")); written <- err }()
+						b := make([]byte, 1)
+						if _, err := io.ReadFull(dst, b); err != nil {
+							t.Fatal(err)
+						}
+						if err := <-written; err != nil {
+							t.Fatal(err)
+						}
+						synctest.Wait()
+						if countSlots(limited) != 1 {
+							t.Fatal("active one-way tunnel expired")
+						}
+					}
+				}
+				// No traffic now: both directions must be closed after one shared timeout.
+				time.Sleep(time.Minute)
+				synctest.Wait()
+				if _, err := client.Read(make([]byte, 1)); err != io.EOF {
+					t.Fatalf("client idle close: %v", err)
+				}
+				if _, err := remote.Read(make([]byte, 1)); err != io.EOF {
+					t.Fatalf("upstream idle close: %v", err)
+				}
+				if countSlots(limited) != 0 {
+					t.Fatal("idle tunnel slot leaked")
+				}
+				client.Close()
+				stopPipeProxy(t, p, server, done)
+			})
+		})
+	}
+}
+
+func TestAdmissionReleasePaths(t *testing.T) {
+	for _, mode := range []string{"header_timeout", "malformed", "connect_failed", "force_tunnel"} {
+		t.Run(mode, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				upstream, remote := net.Pipe()
+				defer remote.Close()
+				p := newProxy(testLog(), func(context.Context, string, string) (net.Conn, error) {
+					if mode == "connect_failed" {
+						return nil, errors.New("private detail")
+					}
+					return upstream, nil
+				})
+				server, limited, l, done := pipeProxy(p)
+				c := pipeClient(l)
+				switch mode {
+				case "header_timeout":
+					time.Sleep(10 * time.Second)
+					synctest.Wait()
+				case "malformed":
+					go fmt.Fprint(c, "INVALID REQUEST\r\n\r\n")
+					io.ReadAll(c)
+				case "connect_failed":
+					resp, err := pipeRequest(c, "CONNECT", "example.com:443")
+					if err != nil || resp.StatusCode != 502 {
+						t.Fatalf("%v %v", resp, err)
+					}
+					io.Copy(io.Discard, resp.Body)
+					resp.Body.Close()
+					c.Close()
+				case "force_tunnel":
+					resp, err := pipeRequest(c, "CONNECT", "example.com:443")
+					if err != nil || resp.StatusCode != 200 {
+						t.Fatalf("%v %v", resp, err)
+					}
+					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+					defer cancel()
+					if err := p.Shutdown(ctx, server); !errors.Is(err, context.DeadlineExceeded) {
+						t.Fatal(err)
+					}
+				}
+				synctest.Wait()
+				if countSlots(limited) != 0 {
+					t.Fatal("slot leaked", mode)
+				}
+				c.Close()
+				upstream.Close()
+				stopPipeProxy(t, p, server, done)
+			})
+		})
+	}
+}
+
+func TestWrappedHalfCloseAndExactlyOnceClose(t *testing.T) {
+	a, b := tcpPair(t)
+	p := New(testLog(), 1, time.Minute)
+	l := p.Listener(newPipeListener()).(*limitedListener)
+	c := &clientConn{Conn: a, listener: l}
+	l.p.clients[c] = struct{}{}
+	if err := c.CloseWrite(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Read(make([]byte, 1)); err != io.EOF {
+		t.Fatal(err)
+	}
+	if countSlots(l) != 1 {
+		t.Fatal("half-close released full connection")
+	}
+	go b.Write([]byte("reply"))
+	got := make([]byte, 5)
+	if _, err := io.ReadFull(c, got); err != nil || string(got) != "reply" {
+		t.Fatalf("%q %v", got, err)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); c.Close() }()
+	}
+	wg.Wait()
+	if countSlots(l) != 0 {
+		t.Fatal("close did not release")
+	}
+}
+
+func TestStreamingShutdown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		upstream, origin := net.Pipe()
+		defer origin.Close()
+		p := newProxy(testLog(), func(context.Context, string, string) (net.Conn, error) { return upstream, nil })
+		server, limited, l, done := pipeProxy(p)
+		client := pipeClient(l)
+		go func() {
+			req, err := http.ReadRequest(bufio.NewReader(origin))
+			if err != nil {
+				return
+			}
+			req.Body.Close()
+			fmt.Fprint(origin, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n")
+			io.Copy(io.Discard, origin)
+		}()
+		resp, err := pipeRequest(client, "GET", "http://example.com/stream")
+		if err != nil {
+			t.Fatal(err)
+		}
+		b := make([]byte, 1)
+		if _, err = io.ReadFull(resp.Body, b); err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if err = p.Shutdown(ctx, server); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatal(err)
+		}
+		if _, err = io.ReadAll(resp.Body); err == nil {
+			t.Fatal("unfinished HTTP stream not terminated")
+		}
+		resp.Body.Close()
+		client.Close()
+		synctest.Wait()
+		if countSlots(limited) != 0 {
+			t.Fatal("HTTP stream slot leaked")
+		}
+		p.mu.Lock()
+		active := p.active
+		p.mu.Unlock()
+		if active != 0 {
+			t.Fatal("HTTP handler leaked")
+		}
+		<-done
+	})
+}
+
+func TestSourceLogging(t *testing.T) {
+	var logs bytes.Buffer
+	p := newProxy(slog.New(slog.NewJSONHandler(&logs, nil)), func(context.Context, string, string) (net.Conn, error) { return nil, ErrBlocked })
+	r := httptest.NewRequest("GET", "http://example.com/?query-secret", nil)
+	r.RemoteAddr = "100.64.0.42:1234"
+	r.Header.Set("X-Forwarded-For", "spoof-secret")
+	r.Header.Set("Proxy-Authorization", "credential-secret")
+	p.ServeHTTP(httptest.NewRecorder(), r)
+	got := logs.String()
+	if !strings.Contains(got, `"source_ip":"100.64.0.42"`) || !strings.Contains(got, `"reason":"blocked"`) {
+		t.Fatal(got)
+	}
+	for _, secret := range []string{"query-secret", "spoof-secret", "credential-secret"} {
+		if strings.Contains(got, secret) {
+			t.Fatal("log secret", secret)
+		}
+	}
+}
+
+func TestGracefulStreamingShutdown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		upstream, origin := net.Pipe()
+		defer origin.Close()
+		continueStream := make(chan struct{})
+		p := newProxy(testLog(), func(context.Context, string, string) (net.Conn, error) { return upstream, nil })
+		server, limited, l, done := pipeProxy(p)
+		client := pipeClient(l)
+		go func() {
+			req, err := http.ReadRequest(bufio.NewReader(origin))
+			if err != nil {
+				return
+			}
+			req.Body.Close()
+			fmt.Fprint(origin, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n")
+			<-continueStream
+			fmt.Fprint(origin, "1\r\ny\r\n0\r\n\r\n")
+		}()
+		resp, err := pipeRequest(client, "GET", "http://example.com/stream")
+		if err != nil {
+			t.Fatal(err)
+		}
+		first := make([]byte, 1)
+		if _, err = io.ReadFull(resp.Body, first); err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		shutdown := make(chan error, 1)
+		go func() { shutdown <- p.Shutdown(ctx, server) }()
+		synctest.Wait()
+		if p.forceCtx.Err() != nil {
+			t.Fatal("active HTTP canceled before drain deadline")
+		}
+		close(continueStream)
+		rest, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil || string(rest) != "y" {
+			t.Fatalf("%q %v", rest, err)
+		}
+		if err = <-shutdown; err != nil {
+			t.Fatal(err)
+		}
+		client.Close()
+		synctest.Wait()
+		if countSlots(limited) != 0 {
+			t.Fatal("drained HTTP slot leaked")
+		}
+		<-done
+	})
+}
+
+type sourceConn struct{ net.Conn }
+
+func (c sourceConn) RemoteAddr() net.Addr {
+	return &net.TCPAddr{IP: net.IPv4(100, 64, 0, 42), Port: 1234}
+}
+func TestConnectAndRejectionSourceLogs(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var logs bytes.Buffer
+		upstream, remote := net.Pipe()
+		defer remote.Close()
+		p := newProxy(slog.New(slog.NewJSONHandler(&logs, nil)), func(context.Context, string, string) (net.Conn, error) { return upstream, nil })
+		p.maxClients = 1
+		server, _, l, done := pipeProxy(p)
+		client, accepted := net.Pipe()
+		l.incoming <- sourceConn{accepted}
+		resp, err := pipeRequest(client, "CONNECT", "example.com:443")
+		if err != nil || resp.StatusCode != 200 {
+			t.Fatalf("%v %v", resp, err)
+		}
+		extra, rejected := net.Pipe()
+		l.incoming <- sourceConn{rejected}
+		if _, err = extra.Read(make([]byte, 1)); err != io.EOF {
+			t.Fatal(err)
+		}
+		extra.Close()
+		client.Close()
+		remote.Close()
+		synctest.Wait()
+		stopPipeProxy(t, p, server, done)
+		got := logs.String()
+		if strings.Count(got, `"source_ip":"100.64.0.42"`) < 3 || !strings.Contains(got, "tunnel established") || !strings.Contains(got, "tunnel closed") || !strings.Contains(got, `"reason":"max_clients"`) {
+			t.Fatal(got)
+		}
+	})
+}
+
+func TestLateConnectCannotRegisterAfterShutdown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		entered := make(chan struct{})
+		late, remote := net.Pipe()
+		defer remote.Close()
+		p := newProxy(testLog(), func(ctx context.Context, _, _ string) (net.Conn, error) {
+			close(entered)
+			<-ctx.Done()
+			return late, nil
+		})
+		server, limited, l, done := pipeProxy(p)
+		client := pipeClient(l)
+		received := make(chan *http.Response, 1)
+		go func() { resp, _ := pipeRequest(client, "CONNECT", "example.com:443"); received <- resp }()
+		<-entered
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		stopped := make(chan error, 1)
+		go func() { stopped <- p.Shutdown(ctx, server) }()
+		resp := <-received
+		if resp == nil || resp.StatusCode != 503 {
+			t.Fatalf("late dial response %v", resp)
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		if err := <-stopped; err != nil {
+			t.Fatal(err)
+		}
+		if _, err := remote.Read(make([]byte, 1)); err != io.EOF {
+			t.Fatal("late upstream leaked", err)
+		}
+		client.Close()
+		synctest.Wait()
+		if countSlots(limited) != 0 {
+			t.Fatal("late CONNECT slot leaked")
+		}
+		p.mu.Lock()
+		n := len(p.tunnels)
+		p.mu.Unlock()
+		if n != 0 {
+			t.Fatal("late tunnel registered")
+		}
+		<-done
+	})
+}
+
+func TestConcurrentAdmission(t *testing.T) {
+	p := New(testLog(), 4, time.Minute)
+	s := proxyServer(t, p)
+	defer s.Close()
+	address := strings.TrimPrefix(s.URL, "http://")
+	var held []net.Conn
+	for i := 0; i < 4; i++ {
+		c, err := net.Dial("tcp", address)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.SetDeadline(time.Now().Add(3 * time.Second))
+		resp, err := pipeRequest(c, "GET", "/invalid")
+		if err != nil {
+			t.Fatal(err)
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		held = append(held, c)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c, err := net.Dial("tcp", address)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			defer c.Close()
+			c.SetDeadline(time.Now().Add(3 * time.Second))
+			if resp, err := pipeRequest(c, "GET", "/invalid"); err == nil {
+				resp.Body.Close()
+				t.Error("excess connection admitted")
+			}
+		}()
+	}
+	wg.Wait()
+	if slots(s) != 4 {
+		t.Fatal("concurrent rejection changed slots", slots(s))
+	}
+	for _, c := range held {
+		c.Close()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := p.Shutdown(ctx, s.Config); err != nil {
+		t.Fatal(err)
+	}
+	if slots(s) != 0 {
+		t.Fatal("shutdown leaked slots", slots(s))
+	}
+}
+func TestHTTPDialCanceledAtShutdownDeadline(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		entered := make(chan struct{})
+		canceled := make(chan struct{})
+		p := newProxy(testLog(), func(ctx context.Context, _, _ string) (net.Conn, error) {
+			close(entered)
+			<-ctx.Done()
+			close(canceled)
+			return nil, ctx.Err()
+		})
+		server, limited, l, done := pipeProxy(p)
+		client := pipeClient(l)
+		responseDone := make(chan struct{})
+		go func() {
+			resp, _ := pipeRequest(client, "GET", "http://example.com/")
+			if resp != nil {
+				resp.Body.Close()
+			}
+			close(responseDone)
+		}()
+		<-entered
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if err := p.Shutdown(ctx, server); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatal(err)
+		}
+		<-canceled
+		<-responseDone
+		client.Close()
+		synctest.Wait()
+		if countSlots(limited) != 0 {
+			t.Fatal("HTTP dial slot leaked")
+		}
+		p.mu.Lock()
+		active := p.active
+		p.mu.Unlock()
+		if active != 0 {
+			t.Fatal("HTTP dial handler leaked")
+		}
+		<-done
+	})
+}
+func TestUploadShutdown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		upstream, origin := net.Pipe()
+		defer origin.Close()
+		received := make(chan struct{})
+		p := newProxy(testLog(), func(context.Context, string, string) (net.Conn, error) { return upstream, nil })
+		server, limited, l, done := pipeProxy(p)
+		client := pipeClient(l)
+		go func() {
+			req, err := http.ReadRequest(bufio.NewReader(origin))
+			if err != nil {
+				return
+			}
+			b := make([]byte, 1)
+			if _, err = io.ReadFull(req.Body, b); err != nil {
+				return
+			}
+			close(received)
+			io.Copy(io.Discard, req.Body)
+			req.Body.Close()
+		}()
+		writeDone := make(chan struct{})
+		go func() {
+			fmt.Fprint(client, "POST http://example.com/ HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n")
+			close(writeDone)
+		}()
+		<-writeDone
+		<-received
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if err := p.Shutdown(ctx, server); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatal(err)
+		}
+		client.Close()
+		synctest.Wait()
+		if countSlots(limited) != 0 {
+			t.Fatal("upload slot leaked")
+		}
+		p.mu.Lock()
+		active := p.active
+		p.mu.Unlock()
+		if active != 0 {
+			t.Fatal("upload handler leaked")
+		}
+		// net/http may finish its bounded TCP RST-avoidance delay after Close.
+		// Advance fake time only; the proxy already returned within its budget.
+		time.Sleep(time.Second)
+		synctest.Wait()
+		<-done
+	})
+}
+
+func TestHTTPDialCanceledOnClientDisconnect(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		entered := make(chan struct{})
+		canceled := make(chan struct{})
+		p := newProxy(testLog(), func(ctx context.Context, _, _ string) (net.Conn, error) {
+			close(entered)
+			<-ctx.Done()
+			close(canceled)
+			return nil, ctx.Err()
+		})
+		server, limited, l, done := pipeProxy(p)
+		defer stopPipeProxy(t, p, server, done)
+		client := pipeClient(l)
+		go fmt.Fprint(client, "GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n")
+		<-entered
+		client.Close()
+		synctest.Wait()
+		select {
+		case <-canceled:
+		default:
+			t.Fatal("dial outlived client cancellation")
+		}
+		if countSlots(limited) != 0 {
+			t.Fatal("canceled HTTP dial slot leaked")
+		}
+	})
 }

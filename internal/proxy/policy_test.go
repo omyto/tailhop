@@ -3,9 +3,12 @@ package proxy
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"net/netip"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -162,4 +165,103 @@ func TestDialCandidatesAndDeadline(t *testing.T) {
 	if _, e = d.DialContext(context.Background(), "tcp", "[2606:4700::1111]:443"); !errors.Is(e, context.DeadlineExceeded) {
 		t.Fatal(e)
 	}
+}
+
+func TestStalledFamilyFallback(t *testing.T) {
+	for _, firstIPv6 := range []bool{true, false} {
+		t.Run(fmt.Sprint(firstIPv6), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				v6 := netip.MustParseAddr("2606:4700::1111")
+				v4 := netip.MustParseAddr("8.8.8.8")
+				first, second := v6, v4
+				if !firstIPv6 {
+					first, second = v4, v6
+				}
+				attempts := 0
+				d := &policyDialer{
+					resolver: resolveFunc(func(context.Context, string, string) ([]netip.Addr, error) {
+						return []netip.Addr{netip.MustParseAddr("::1"), first, first, netip.MustParseAddr("100.64.0.1"), second}, nil
+					}),
+					dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+						attempts++
+						if network != "tcp" {
+							t.Fatal(network)
+						}
+						if attempts == 1 {
+							if address != net.JoinHostPort(first.String(), "443") {
+								t.Fatal(address)
+							}
+							// Stall until this candidate's slice of the deadline expires.
+							<-ctx.Done()
+							return nil, ctx.Err()
+						}
+						if address != net.JoinHostPort(second.String(), "443") {
+							t.Fatal(address)
+						}
+						if ctx.Err() != nil {
+							t.Fatal("fallback context already expired")
+						}
+						a, b := net.Pipe()
+						b.Close()
+						return a, nil
+					},
+				}
+				start := time.Now()
+				c, err := d.DialContext(context.Background(), "tcp", "example.com:443")
+				if err != nil {
+					t.Fatal(err)
+				}
+				c.Close()
+				if attempts != 2 || time.Since(start) != 2*time.Second {
+					t.Fatalf("%d attempts in %s", attempts, time.Since(start))
+				}
+			})
+		})
+	}
+}
+func TestFallbackCancellationAndCleanup(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		calls := 0
+		returned, peer := net.Pipe()
+		defer peer.Close()
+		d := &policyDialer{
+			resolver: resolveFunc(func(context.Context, string, string) ([]netip.Addr, error) {
+				return []netip.Addr{netip.MustParseAddr("2606:4700::1111"), netip.MustParseAddr("8.8.8.8")}, nil
+			}),
+			dial: func(attempt context.Context, _, _ string) (net.Conn, error) {
+				calls++
+				cancel()
+				<-attempt.Done()
+				// A late connection returned after cancellation must also be closed.
+				return returned, nil
+			},
+		}
+		if _, err := d.DialContext(ctx, "tcp", "example.com:80"); !errors.Is(err, context.Canceled) {
+			t.Fatal(err)
+		}
+		if calls != 1 {
+			t.Fatal("continued dialing after cancellation")
+		}
+		if _, err := peer.Read(make([]byte, 1)); err != io.EOF {
+			t.Fatal("late connection leaked", err)
+		}
+	})
+}
+func TestOverallDialBudget(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		d := &policyDialer{
+			resolver: resolveFunc(func(context.Context, string, string) ([]netip.Addr, error) {
+				return []netip.Addr{netip.MustParseAddr("2606:4700::1111"), netip.MustParseAddr("8.8.8.8")}, nil
+			}),
+			dial: func(ctx context.Context, _, _ string) (net.Conn, error) { <-ctx.Done(); return nil, ctx.Err() },
+		}
+		start := time.Now()
+		if _, err := d.DialContext(context.Background(), "tcp", "example.com:443"); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatal(err)
+		}
+		if time.Since(start) != dialTimeout {
+			t.Fatal("overall budget exceeded", time.Since(start))
+		}
+	})
 }

@@ -27,6 +27,14 @@ func run() error {
 	if err != nil || port < 1 || port > 65535 {
 		return fmt.Errorf("PROXY_PORT must be 1–65535")
 	}
+	maxClients, err := strconv.Atoi(env("MAX_CLIENTS", "100"))
+	if err != nil || maxClients < 1 {
+		return fmt.Errorf("MAX_CLIENTS must be a positive integer")
+	}
+	idle, err := time.ParseDuration(env("IDLE_TIMEOUT", "10m"))
+	if err != nil || idle <= 0 {
+		return fmt.Errorf("IDLE_TIMEOUT must be a positive Go duration")
+	}
 	var level slog.Level
 	switch env("LOG_LEVEL", "info") {
 	case "debug":
@@ -72,34 +80,26 @@ func run() error {
 		},
 	}
 	defer node.Close()
-	// Listen may block while enrolling: closing tsnet on cancellation unblocks it.
-	starting := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			node.Close()
-		case <-starting:
-		}
-	}()
+	// Listen initializes tsnet synchronously; enrollment proceeds in tsnet's
+	// background workers. Do not call Close concurrently with initialization.
 	listener, err := node.Listen("tcp", fmt.Sprintf(":%d", port))
-	close(starting)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil
 		}
-		return fmt.Errorf("tsnet listener failed")
+		return fmt.Errorf("tsnet listener failed: %w", err)
 	}
 	defer listener.Close()
-	p := proxy.New(logger)
+	p := proxy.New(logger, maxClients, idle)
 	server := p.Server()
 	served := make(chan error, 1)
-	go func() { served <- server.Serve(listener) }()
+	go func() { served <- server.Serve(p.Listener(listener)) }()
 	logger.Info("proxy listening", "port", port)
 	select {
 	case <-ctx.Done():
 	case err = <-served:
 		if err != nil && err != http.ErrServerClosed {
-			logger.Error("listener stopped")
+			logger.Error("listener stopped", "error", err)
 		}
 	}
 	serveErr := err
@@ -109,7 +109,7 @@ func run() error {
 		logger.Info("shutdown deadline reached")
 	}
 	if serveErr != nil && serveErr != http.ErrServerClosed {
-		return fmt.Errorf("proxy listener failed")
+		return fmt.Errorf("proxy listener failed: %w", serveErr)
 	}
 	return nil
 }

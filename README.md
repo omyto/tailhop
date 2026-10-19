@@ -94,8 +94,8 @@ See the [security guide](docs/security.md) before exposing access to peers.
 
 ## Contributing and license
 
-Focused fixes, tests, and documentation improvements are welcome. Keep changes
-small and preserve the project's tiny forward-proxy scope. [SPEC.md](SPEC.md)
-provides the implementation and development reference.
+Focused fixes, tests, and documentation improvements are welcome. Read the
+[contributing guide](CONTRIBUTING.md) for build commands, tests, and pull request
+expectations. [SPEC.md](SPEC.md) provides the implementation reference.
 
 Released under the [MIT license](LICENSE).

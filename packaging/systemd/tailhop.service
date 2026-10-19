@@ -1,0 +1,26 @@
+[Unit]
+Description=Tailhop Tailnet forward proxy
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=tailhop
+Group=tailhop
+ExecStart=/usr/local/bin/tailhop
+EnvironmentFile=/etc/tailhop/tailhop.env
+Environment=TS_STATE_DIR=/var/lib/tailhop
+StateDirectory=tailhop
+StateDirectoryMode=0700
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+NoNewPrivileges=true
+UMask=0077
+ProtectSystem=strict
+ProtectHome=true
+# Keep temporary files writable without exposing the host's temporary files.
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -2,25 +2,21 @@
 
 > A tiny forward proxy that lets devices on your Tailnet access the internet through a remote host, powered by tsnet.
 
-tailhop is a small Go HTTP forward proxy that joins your Tailnet as its own node.
-Configure an application to use it, and that application's HTTP or HTTPS traffic
-leaves through the deployment host's normal network route.
+tailhop is a lightweight HTTP/HTTPS forward proxy written in Go and powered by
+`tsnet`. It runs as a standalone Tailnet node and forwards web traffic through
+the host or container's normal outbound network connection.
 
 ```text
-Tailnet client → tsnet listener → tailhop → host/container network → internet
+Tailnet client ──► tailhop (tsnet) ──► Host/container egress ──► Internet
 ```
-
-Unlike a full Tailscale Exit Node, tailhop does not route all traffic from a device.
-Applications must explicitly use the proxy. Its embedded tsnet node needs no
-separate tailscaled process, TUN device, or public proxy port.
 
 ## Features
 
-- HTTP/1.1 forwarding and HTTPS via CONNECT, without TLS interception.
-- Streaming uploads and responses, including long-lived active streams.
-- Public-IP-only destinations on ports 80 and 443, validated at connection time.
-- Global connection admission, activity-based idle timeouts, and graceful shutdown.
-- Non-root Docker deployment or a native Linux systemd service, with persistent node identity.
+- Tailnet-native HTTP forwarding and HTTPS CONNECT tunneling.
+- Streaming uploads and responses without TLS interception.
+- Standalone Go application using tsnet; no separate tailscaled process required.
+- Non-root Docker and native Linux systemd deployments with persistent node identity.
+- Public destination restrictions, global connection limits, and idle timeouts.
 
 ## Quick start
 
@@ -31,8 +27,8 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-Edit `.env` and replace the `TS_AUTHKEY` placeholder with a Tailscale enrollment
-key appropriate for your Tailnet. Allow intended clients to reach this node on
+Edit `.env` and replace `TS_AUTHKEY` with a Tailscale Auth Key for node enrollment
+(not an API access token). Allow intended clients to reach this node on
 TCP 8080 through your Tailnet grants/ACLs, then start it:
 
 ```sh
@@ -41,8 +37,8 @@ docker compose up --build -d
 ```
 
 Compose builds from local source. Confirm the node is connected in the Tailscale
-device view. See the [Docker guide](docs/docker.md) for enrollment, logs, state
-volume permissions, updates, and removing the enrollment key after setup.
+device view. See the [Docker guide](docs/docker.md) for detailed setup and state
+persistence.
 
 ## Use the proxy
 
@@ -57,40 +53,31 @@ The hostname assumes working MagicDNS and a node named `tailhop`; otherwise use
 its actual Tailnet DNS name or IP. If `NO_PROXY` would bypass the proxy, add
 `--noproxy ""` to curl (also valid in Windows CMD).
 
-Use the same HTTP proxy address for HTTPS applications: CONNECT carries their TLS
-connection. Configure each application explicitly; starting tailhop does not
-change the client's default route. The reported public IP follows the actual
-host/container egress path, including any NAT, VPN, or routing policy.
-
-## Deployment
-
-- **[Docker / Compose](docs/docker.md):** source-built container with a persistent
-  state volume; no published ports or privileged runtime requirements.
-- **[Native Linux / systemd](docs/systemd.md):** the same executable under a
-  dedicated service account, with systemd-managed state and journald logging.
-
-Both deployments persist tsnet credentials so restarts can reuse the node identity.
+Configure applications explicitly with this HTTP proxy address, including for
+HTTPS. The reported public IP reflects the deployment's egress path, including
+any NAT, VPN, or routing policy.
 
 ## Security considerations
 
-Restrict access with Tailnet grants/ACLs. There is no additional proxy user/password
-login, and one client can occupy all connection slots. Defaults are 100 concurrent
-inbound TCP connections and a ten-minute inactivity timeout; apply deployment
-resource limits appropriate to your workload.
+Tailnet grants/ACLs control inbound access; tailhop adds no proxy username/password
+authentication. Outbound destinations are restricted to public IPs on ports 80 and
+443. These restrictions are not a complete SSRF defense or a protocol filter.
 
-Private and special-use destination addresses are denied, and outbound ports are
-restricted to 80 and 443. This policy is not a complete SSRF defense or a content
-filter: CONNECT can carry arbitrary TCP on those ports. Ordinary HTTP is plaintext
-on the internet leg; HTTPS retains client-to-destination TLS.
+Connection limits are global, not per client: one peer can occupy all slots.
+Defaults are 100 inbound TCP connections and a ten-minute inactivity timeout;
+apply deployment resource limits appropriate to your workload. Ordinary HTTP is
+plaintext on the internet leg; HTTPS retains client-to-destination TLS.
 
-See the [security guide](docs/security.md) before exposing access to peers.
+See the [security guide](docs/security.md) for boundaries, risks, and limitations.
 
-## Documentation
+## Deployment and documentation
 
-- [Docker deployment and troubleshooting](docs/docker.md)
-- [Native Linux installation and operation](docs/systemd.md)
-- [Configuration, connection limits, and timeouts](docs/configuration.md)
-- [Security boundaries and limitations](docs/security.md)
+- [Docker / Compose](docs/docker.md): source-built container, persistent state,
+  and no published ports or privileged runtime requirements.
+- [Native Linux / systemd](docs/systemd.md): dedicated service account,
+  systemd-managed state, and journald logging.
+- [Configuration](docs/configuration.md): environment variables, connection limits,
+  and timeouts.
 
 ## Contributing and license
 

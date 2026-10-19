@@ -11,12 +11,12 @@ Tailnet client --> Tailscale --> tsnet.Listen --> forward proxy
                                                |
                                      normal net.Dialer
                                                |
-                                  container default route
+                                  container / host default route
                                                |
                                         public internet
 ```
 
-The container needs outbound connectivity for both Tailscale control/peer traffic and proxied destinations. With ordinary Docker bridge networking, outbound traffic typically exits through the Docker host's NAT; do not require `network_mode: host` or assume every deployment uses the same egress IP.
+Both native Linux and container deployments need outbound connectivity for Tailscale control/peer traffic and proxied destinations. Native Linux deployment uses the host's normal network route. With ordinary Docker bridge networking, outbound traffic typically exits through the Docker host's NAT; do not require `network_mode: host` or assume every deployment uses the same egress IP.
 
 ## 2. Scope
 
@@ -29,7 +29,7 @@ The container needs outbound connectivity for both Tailscale control/peer traffi
 5. Ordinary `net.Dialer`-based outbound connections, and a standard `http.Transport` for plain HTTP forwarding, with a centralized outbound destination policy applied to **every actual TCP dial**.
 6. Persistent node identity and clean SIGINT/SIGTERM handling.
 7. `log/slog` with structured, modest logging. No URL query strings, credentials, auth keys, or proxy header values in logs.
-8. Docker deployment without root, TUN, `NET_ADMIN`, privileged mode, or host-published ports.
+8. Docker deployment without root, TUN, `NET_ADMIN`, privileged mode, or host-published ports. Native Linux systemd packaging is an alternative using the same unprivileged executable and tsnet architecture.
 
 ### Non-goals
 
@@ -78,7 +78,7 @@ Use only environment variables. Validate configuration early; report useful erro
 | --- | --- | --- |
 | `TS_AUTHKEY` | unset | Auth key for initial node enrollment; `tsnet` may read it directly. Already-enrolled persistent state should work without it. |
 | `TS_HOSTNAME` | `tailhop` | Tailscale node hostname, set through `tsnet.Server.Hostname`. |
-| `TS_STATE_DIR` | `/var/lib/tailhop` | Directory passed to `tsnet.Server.Dir`; create if needed with secure permissions and ensure writable as container UID. Persist in Docker. |
+| `TS_STATE_DIR` | `/var/lib/tailhop` | Directory passed to `tsnet.Server.Dir`; create if needed with secure permissions and ensure writable by the runtime user. Persist in Docker; native systemd packaging fixes this at /var/lib/tailhop. |
 | `PROXY_PORT` | `8080` | Tailnet-only listening TCP port, valid 1–65535. |
 | `LOG_LEVEL` | `info` | One of `debug`, `info`, `warn`, `error`. |
 | `MAX_CLIENTS` | `100` | Positive integer; global simultaneous inbound TCP connection limit, not per IP. |
@@ -113,6 +113,8 @@ internal/proxy/policy.go
 internal/proxy/policy_test.go
 Dockerfile
 compose.yaml
+packaging/systemd/tailhop.service
+packaging/systemd/tailhop.env.example
 .dockerignore
 .gitignore
 go.mod
@@ -123,7 +125,9 @@ SPEC.md
 
 Add at most one small extra internal Go file if it materially improves clarity. Avoid `pkg/`, dependency injection frameworks, routers, CLI frameworks, heavy proxy libraries, and config frameworks. Prefer Go standard library plus `tailscale.com/tsnet` and its transitive dependencies. Let the current supported Go toolchain and stable compatible `tailscale.com` version determine `go.mod`; do not guess versions or pin an obsolete release.
 
-## 8. Docker requirements
+## 8. Deployment requirements
+
+### Docker
 
 - Multi-stage Dockerfile: build Go binary in a Go image; run with minimal runtime containing suitable CA roots as required by tsnet networking.
 - Run as **non-root**. State mount target `/var/lib/tailhop` must be writeable by the runtime UID. If using a named volume, include reliable first-run permissions handling without starting the app as root; explain host bind-mount ownership requirements.
@@ -132,6 +136,16 @@ Add at most one small extra internal Go file if it materially improves clarity. 
 - Validate Compose with `docker compose config --quiet` to avoid printing TS_AUTHKEY.
 - Support clean `docker compose down` / SIGTERM. Provide `.env.example` with placeholders (not real secrets) and `.dockerignore`.
 - Document expected default Docker bridge NAT behavior and caveats about the observed public egress IP.
+
+### Native Linux systemd alternative
+
+- Provide packaging/systemd/tailhop.service and packaging/systemd/tailhop.env.example. Use the existing executable at /usr/local/bin/tailhop with Type=simple; do not claim readiness notification.
+- Run as a persistent, dedicated non-login system user/group named tailhop. Use StateDirectory=tailhop and StateDirectoryMode=0700; set TS_STATE_DIR=/var/lib/tailhop in the unit and document that it must not be overridden for this layout.
+- Read /etc/tailhop/tailhop.env using EnvironmentFile syntax. Document root ownership and mode 0600, environment-variable secret exposure, initial enrollment, and removing TS_AUTHKEY after successful enrollment while preserving valid state.
+- Order after and want network-online.target. Use Restart=on-failure with a five-second delay, TimeoutStopSec=20s, default SIGTERM and journald logging, and WantedBy=multi-user.target for boot startup.
+- Apply NoNewPrivileges=true, UMask=0077, ProtectSystem=strict, and ProtectHome=true. PrivateTmp=true supplies writable private temporary storage; StateDirectory remains the persistent writable exception. Do not restrict networking/DNS or require root execution, TUN, capabilities, firewall changes, or a separate tailscaled daemon.
+- Document manual installation, operations, binary replacement with identity preservation, and uninstallation that retains configuration and state. Do not automatically install/start the service or delete persistent data. This native service packaging supports Linux with systemd.
+- Validate using systemd-analyze verify when available; distinguish structural errors from missing installation prerequisites. Live enrollment, directory ownership, sandbox compatibility and service lifecycle remain manual acceptance checks.
 
 ## 9. Tests and verification
 
@@ -180,6 +194,6 @@ If dependency downloading, Docker, race instrumentation, or another environment 
 - HTTP forwarding and CONNECT work per spec without buffering complete payloads.
 - Outbound IP checks cannot be bypassed by DNS resolution changes before dialing.
 - CONNECT tunnels do not leak after shutdown (including hijacked-connection tracking).
-- Docker runs non-root, persists state and publishes no ports.
+- Docker runs non-root, persists state and publishes no ports. Native systemd packaging runs the same executable unprivileged with persistent state and documented manual installation.
 - Tests run without real Tailnet credentials; requested verification commands have reported results.
 - README reflects actual code and has a reproducible quick start and known limitations.

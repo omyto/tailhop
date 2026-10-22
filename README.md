@@ -74,7 +74,7 @@ See the [security guide](docs/security.md) for boundaries, risks, and limitation
 
 - [Docker / Compose](docs/docker.md): source builds and versioned image deployment,
   with persistent state and no published ports or privileged runtime requirements.
-- [Native Linux / systemd](docs/systemd.md): dedicated service account,
+- [Native Linux / systemd](docs/systemd.md): prebuilt binary or source installation,
   systemd-managed state, and journald logging.
 - [Configuration](docs/configuration.md): environment variables, connection limits,
   and timeouts.

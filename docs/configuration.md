@@ -12,7 +12,7 @@ tailhop reads environment variables at startup and validates them before serving
 | `MAX_CLIENTS` | `100` | Positive integer; global simultaneous inbound TCP connection limit. |
 | `IDLE_TIMEOUT` | `10m` | Positive Go duration, such as `30s`, `10m`, or `2h`; HTTP and CONNECT inactivity. |
 
-Keep state private and writable by the runtime user. Both packaged deployments use `/var/lib/tailhop`; the systemd layout requires that path and it must not be overridden in its environment file. See [Docker](docker.md) or [systemd](systemd.md) for ownership and persistence. Do not commit environment files or state.
+Keep state private and writable by the runtime user. Both packaged deployments use `/var/lib/tailhop`; the systemd layout requires that path and it must not be overridden in its environment file. See [Docker](docker.md) or [systemd](systemd.md) for ownership and persistence. For direct unprivileged execution, override `TS_STATE_DIR` with a private persistent directory as shown in [INSTALL.md](../INSTALL.md). Do not commit environment files or state.
 
 ## Connection admission
 

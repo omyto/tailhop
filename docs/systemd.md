@@ -4,54 +4,49 @@ The [service unit](../packaging/systemd/tailhop.service) runs the same executabl
 
 ## Obtain the executable
 
-Use a prebuilt binary when trusted draft release assets are available, or build from source. The target server needs Linux with systemd and CA certificates. A prebuilt installation requires neither Go nor Docker.
+For prebuilt Linux binaries, start with the bundled [INSTALL.md](../INSTALL.md): it covers direct execution and a complete systemd installation using only archive contents. Alternatively, build from source below. The target server needs Linux with systemd and CA certificates. A prebuilt installation requires neither Go nor Docker.
 
 ### Prebuilt Linux binary
 
 The binary workflow creates or updates a **GitHub Draft Release** after Go checks, package validation, and checksum verification succeed. It never publishes a release. The repository remains private, and draft assets are not publicly downloadable. An authorized maintainer can rebuild the existing tag without changing it:
 
-1. First commit and make [linux-binaries.yml](../.github/workflows/linux-binaries.yml) available on the repository's default branch. Manual execution requires the workflow on that branch.
-2. Open **Actions → Linux binaries → Run workflow**. Select the default branch as the workflow source and enter `release_tag=v0.1.0`. The workflow checks out and verifies the tagged commit before testing/building; it does not package main as `0.1.0`. Do not repush, move, or recreate the tag.
-3. After both workflow jobs succeed, open the repository's **Releases** page and select the draft for `v0.1.0`. Maintainers with draft access can download these three assets into the same directory:
+1. Make [linux-binaries.yml](../.github/workflows/linux-binaries.yml) available on the default branch for manual execution. Choose an existing stable release tag containing `INSTALL.md`, LICENSE, and both systemd packaging files. Everything bundled must come from that tagged source.
+2. Open **Actions → Linux binaries → Run workflow**. Select the default branch as the workflow source and enter the chosen tag in `release_tag`. The workflow checks out and verifies that exact tagged commit before testing/building. Do not repush, move, or recreate tags.
+3. After both jobs succeed, open **Releases** and select the draft for that tag. Download only the archive matching the target machine: `tailhop_<version>_linux_amd64.tar.gz` for `x86_64`, or `tailhop_<version>_linux_arm64.tar.gz` for `aarch64` (`uname -m` identifies it).
 
-   ```text
-   tailhop_0.1.0_linux_amd64.tar.gz
-   tailhop_0.1.0_linux_arm64.tar.gz
-   checksums.txt
-   ```
+The existing `v0.1.0` tag predates `INSTALL.md`. The new workflow deliberately rejects it rather than mixing old binaries with newer installation files. A maintainer must later choose a new version tag containing all required files; no existing tag should be moved.
 
-Draft release assets are separate from the temporary Actions artifact used between jobs. That artifact still requests 30-day retention, subject to repository policy; its expiration does not remove the draft assets. Drafts require authorized access and may be deleted by maintainers. Provide the three files to an intended installer through a trusted channel.
+Draft release assets are separate from the temporary Actions artifact used between jobs. That artifact still requests 30-day retention, subject to repository policy; its expiration does not remove the draft assets. Drafts require authorized access and may be deleted by maintainers. Provide the selected single archive to an intended installer through a trusted channel. Each archive has an internal `checksums.txt`; there is no separate checksum release asset in the new format. The private `archive-sha256.txt` Actions handoff record verifies archive bytes between jobs, and uploads are checked against independently calculated GitHub asset digests.
 
 The build job retains read-only repository permissions. Only the release job uses the built-in `GITHUB_TOKEN` with `contents: write`; repository policies must permit that access. No Docker Hub or Tailscale credentials are needed by the workflow.
 
 Reruns reuse the existing draft, leave identical assets alone, and stage changed uploads under temporary names. All replacements are checked against GitHub's SHA-256 digests before old assets are renamed to backups. Backups are deleted only after the complete new set is verified; unrelated attachments are preserved. The job refuses to modify a published release.
 
-Failed uploads or asset operations fail the job. Interrupted updates can leave `tailhop-staging-...` or `tailhop-backup-...` attachments; inspect the failure and rerun to recover, rather than deleting the release or using `gh release upload --clobber`. The updater attempts rollback after rename failures and retains bytes when recovery is incomplete. Updates for the same tag are serialized, but GitHub's API operations are not transactional: do not publish or manually edit the draft or tag while the job is running. Confirm a successful run, the three final filenames, and checksums before distributing files.
+Failed uploads or asset operations fail the job. Interrupted updates can leave `tailhop-staging-...` or `tailhop-backup-...` attachments; inspect the failure and rerun to recover, rather than deleting the release or using `gh release upload --clobber`. The updater attempts rollback after rename failures and retains bytes when recovery is incomplete. Updates for the same tag are serialized, but GitHub's API operations are not transactional: do not publish or manually edit the draft or tag while the job is running. Confirm a successful run and both final archive filenames before distributing files. A recognized legacy `checksums.txt` attachment is removed only after both replacement archives verify; an unrecognized checksum attachment is retained for manual review, as are unrelated assets.
 
-Each architecture archive contains only `tailhop` and `LICENSE`. The maintainer must also supply the matching tagged [service unit](../packaging/systemd/tailhop.service) and [environment example](../packaging/systemd/tailhop.env.example). Select the same release tag in GitHub's source browser and download those files; retain their `packaging/systemd/` paths in the installation directory. No repository clone is needed on the server.
+Each archive includes:
 
-On the target server, identify the architecture:
-
-```sh
-uname -m
+```text
+tailhop
+LICENSE
+INSTALL.md
+checksums.txt
+packaging/systemd/tailhop.service
+packaging/systemd/tailhop.env.example
 ```
 
-`x86_64` maps to `linux_amd64`; `aarch64` maps to `linux_arm64`. From the directory containing the downloaded archives and checksums, select, verify, and extract:
+From the directory containing the downloaded archive, extract into a fresh directory and verify its included files:
 
 ```sh
-version=0.1.0
-case "$(uname -m)" in
-  x86_64) arch=amd64 ;;
-  aarch64) arch=arm64 ;;
-  *) echo 'Unsupported Linux architecture'; exit 1 ;;
-esac
-sha256sum --check checksums.txt &&
-  tar -xzf "tailhop_${version}_linux_${arch}.tar.gz" tailhop LICENSE
+printf 'Path to the downloaded Linux archive: '
+IFS= read -r archive
+mkdir tailhop-install
+tar -xzf "$archive" -C tailhop-install
+cd tailhop-install
+sha256sum --check checksums.txt
 ```
 
-Stop if checksum verification fails. The check verifies both archives, so keep both next to `checksums.txt`. Checksums detect corruption; obtaining the archive and checksums from a trusted maintainer is still necessary. Extraction preserves the executable bit.
-
-Continue with [service installation](#install-the-service) from the directory containing `./tailhop` and `packaging/systemd/`.
+Stop if verification fails, then follow `INSTALL.md` in that directory. It needs no repository clone or extra configuration downloads. Internal checksums cover all other regular files, not the manifest itself, and detect corruption rather than authenticate their containing archive. Compare the archive's SHA-256 with an independently trusted digest, such as its GitHub asset digest, before trusting its contents.
 
 ### Build from source
 
@@ -79,7 +74,9 @@ Install the binary, root-only configuration, and unit. On an existing installati
 ```sh
 sudo install -o root -g root -m 0755 ./tailhop /usr/local/bin/tailhop
 sudo install -d -o root -g root -m 0700 /etc/tailhop
-sudo install -o root -g root -m 0600 packaging/systemd/tailhop.env.example /etc/tailhop/tailhop.env
+if ! sudo test -e /etc/tailhop/tailhop.env; then
+  sudo install -o root -g root -m 0600 packaging/systemd/tailhop.env.example /etc/tailhop/tailhop.env
+fi
 sudoedit /etc/tailhop/tailhop.env
 sudo install -o root -g root -m 0644 packaging/systemd/tailhop.service /etc/systemd/system/tailhop.service
 sudo systemctl daemon-reload
@@ -115,7 +112,7 @@ sudo systemctl stop tailhop
 
 ## Update
 
-Prepare `./tailhop` before stopping the service. For a prebuilt update, obtain the new draft release archives and matching checksums, then repeat the verification/extraction steps above with the new version. Stop if verification fails. For a source update, build the desired checkout:
+Prepare `./tailhop` before stopping the service. For a prebuilt update, obtain the new matching architecture archive, then repeat extraction and its internal checksum verification as described in the bundled `INSTALL.md`. Stop if verification fails. For a source update, build the desired checkout:
 
 ```sh
 mise exec -- go build -trimpath -o tailhop ./cmd/tailhop

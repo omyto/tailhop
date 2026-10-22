@@ -196,6 +196,17 @@ class DraftReleaseTests(unittest.TestCase):
             self.run_update()
         self.assertEqual(self.api.calls, [])
 
+    def test_corrupted_archive_bytes_fail_independent_digest_check(self):
+        for name in NAMES:
+            with self.subTest(archive=name):
+                path = self.directory / name
+                original = path.read_bytes()
+                path.write_bytes(original + b'corruption')
+                with self.assertRaisesRegex(RuntimeError, 'archive-sha256'):
+                    self.run_update()
+                self.assertEqual(self.api.calls, [])
+                path.write_bytes(original)
+
     def test_missing_asset_is_added_without_replacing_identical_assets(self):
         self.api.release()
         originals = [self.api.asset(name, (self.directory / name).read_bytes()) for name in NAMES[:1]]

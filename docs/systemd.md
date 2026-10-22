@@ -4,15 +4,15 @@ The [service unit](../packaging/systemd/tailhop.service) runs the same executabl
 
 ## Obtain the executable
 
-Use a prebuilt binary when a trusted build artifact is available, or build from source. The target server needs Linux with systemd and CA certificates. A prebuilt installation requires neither Go nor Docker.
+Use a prebuilt binary when trusted draft release assets are available, or build from source. The target server needs Linux with systemd and CA certificates. A prebuilt installation requires neither Go nor Docker.
 
 ### Prebuilt Linux binary
 
-The binary workflow stores outputs as private GitHub Actions artifacts, not public release downloads. An authorized maintainer can rebuild the existing tag without changing it:
+The binary workflow creates or updates a **GitHub Draft Release** after Go checks, package validation, and checksum verification succeed. It never publishes a release. The repository remains private, and draft assets are not publicly downloadable. An authorized maintainer can rebuild the existing tag without changing it:
 
 1. First commit and make [linux-binaries.yml](../.github/workflows/linux-binaries.yml) available on the repository's default branch. Manual execution requires the workflow on that branch.
 2. Open **Actions → Linux binaries → Run workflow**. Select the default branch as the workflow source and enter `release_tag=v0.1.0`. The workflow checks out and verifies the tagged commit before testing/building; it does not package main as `0.1.0`. Do not repush, move, or recreate the tag.
-3. After a successful run, download `tailhop-linux-binaries-0.1.0` from the run's artifact list and extract the downloaded ZIP. It contains:
+3. After both workflow jobs succeed, open the repository's **Releases** page and select the draft for `v0.1.0`. Maintainers with draft access can download these three assets into the same directory:
 
    ```text
    tailhop_0.1.0_linux_amd64.tar.gz
@@ -20,7 +20,13 @@ The binary workflow stores outputs as private GitHub Actions artifacts, not publ
    checksums.txt
    ```
 
-Artifacts request 30-day retention, subject to repository policy. They require authorized repository access and are temporary, not permanent public release downloads. A maintainer can provide the files to an intended installer through a trusted channel.
+Draft release assets are separate from the temporary Actions artifact used between jobs. That artifact still requests 30-day retention, subject to repository policy; its expiration does not remove the draft assets. Drafts require authorized access and may be deleted by maintainers. Provide the three files to an intended installer through a trusted channel.
+
+The build job retains read-only repository permissions. Only the release job uses the built-in `GITHUB_TOKEN` with `contents: write`; repository policies must permit that access. No Docker Hub or Tailscale credentials are needed by the workflow.
+
+Reruns reuse the existing draft, leave identical assets alone, and stage changed uploads under temporary names. All replacements are checked against GitHub's SHA-256 digests before old assets are renamed to backups. Backups are deleted only after the complete new set is verified; unrelated attachments are preserved. The job refuses to modify a published release.
+
+Failed uploads or asset operations fail the job. Interrupted updates can leave `tailhop-staging-...` or `tailhop-backup-...` attachments; inspect the failure and rerun to recover, rather than deleting the release or using `gh release upload --clobber`. The updater attempts rollback after rename failures and retains bytes when recovery is incomplete. Updates for the same tag are serialized, but GitHub's API operations are not transactional: do not publish or manually edit the draft or tag while the job is running. Confirm a successful run, the three final filenames, and checksums before distributing files.
 
 Each architecture archive contains only `tailhop` and `LICENSE`. The maintainer must also supply the matching tagged [service unit](../packaging/systemd/tailhop.service) and [environment example](../packaging/systemd/tailhop.env.example). Select the same release tag in GitHub's source browser and download those files; retain their `packaging/systemd/` paths in the installation directory. No repository clone is needed on the server.
 
@@ -109,7 +115,7 @@ sudo systemctl stop tailhop
 
 ## Update
 
-Prepare `./tailhop` before stopping the service. For a prebuilt update, obtain the new artifact and matching checksums, then repeat the verification/extraction steps above with the new version. Stop if verification fails. For a source update, build the desired checkout:
+Prepare `./tailhop` before stopping the service. For a prebuilt update, obtain the new draft release archives and matching checksums, then repeat the verification/extraction steps above with the new version. Stop if verification fails. For a source update, build the desired checkout:
 
 ```sh
 mise exec -- go build -trimpath -o tailhop ./cmd/tailhop
@@ -152,4 +158,4 @@ After manual installation, check startup, journal output, state ownership (tailh
 
 ## Future public distribution
 
-When the repository becomes public, maintainers may distribute these versioned archives and checksums through GitHub Releases. No GitHub Release publishing is implemented now. Cross-compilation and archive checks do not prove ARM64 runtime behavior; test enrollment, forwarding, persistence, and service lifecycle on both target architectures before distributing a build as verified.
+When the repository becomes public, maintainers may choose to publish a verified draft for public binary distribution. Drafts remain non-public until a maintainer publishes them; this workflow never performs that step. Cross-compilation and archive checks do not prove ARM64 runtime behavior; test enrollment, forwarding, persistence, and service lifecycle on both target architectures before distributing a build as verified.

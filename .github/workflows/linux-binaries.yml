@@ -1,0 +1,115 @@
+name: Linux binaries
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing stable release tag (for example v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CGO_ENABLED: '1'
+    steps:
+      - name: Validate release tag
+        id: version
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            tag="$INPUT_RELEASE_TAG"
+          fi
+          if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo 'Expected a stable tag such as v0.1.0 (no prerelease or leading zeros).'
+            exit 1
+          fi
+          printf 'tag=%s\nversion=%s\n' "$tag" "${tag#v}" >> "$GITHUB_OUTPUT"
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ steps.version.outputs.tag }}
+          persist-credentials: false
+      - name: Verify tagged commit
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          commit=$(git rev-parse --verify --end-of-options "refs/tags/${RELEASE_TAG}^{commit}")
+          test "$(git rev-parse HEAD)" = "$commit"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l ./cmd ./internal)
+          if [ -n "$unformatted" ]; then
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test ./...
+      - name: Race test
+        run: go test -race ./...
+      - name: Build and verify archives
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          out="$RUNNER_TEMP/tailhop-linux-binaries"
+          mkdir -p "$out"
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          epoch=$(git show -s --format=%ct HEAD)
+          for arch in amd64 arm64; do
+            stage="$work/$arch"
+            mkdir -p "$stage"
+            GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build \
+              -trimpath -buildvcs=false -ldflags="-s -w" \
+              -o "$stage/tailhop" ./cmd/tailhop
+            test -s "$stage/tailhop"
+            chmod 0755 "$stage/tailhop"
+            info=$(go version -m "$stage/tailhop")
+            printf '%s\n' "$info" | grep -Eq '^[[:space:]]*build[[:space:]]+GOOS=linux$'
+            printf '%s\n' "$info" | grep -Eq "^[[:space:]]*build[[:space:]]+GOARCH=$arch$"
+            printf '%s\n' "$info" | grep -Eq '^[[:space:]]*build[[:space:]]+CGO_ENABLED=0$'
+            install -m 0644 LICENSE "$stage/LICENSE"
+            archive="$out/tailhop_${VERSION}_linux_${arch}.tar.gz"
+            tar --sort=name --mtime="@$epoch" --owner=0 --group=0 --numeric-owner \
+              -C "$stage" -cf - tailhop LICENSE | gzip -n > "$archive"
+            test "$(tar -tzf "$archive" | LC_ALL=C sort)" = $'LICENSE\ntailhop'
+            extracted="$work/extracted-$arch"
+            mkdir -p "$extracted"
+            tar --no-same-owner -xzf "$archive" -C "$extracted"
+            test -s "$extracted/tailhop" && test -x "$extracted/tailhop"
+            test -f "$extracted/LICENSE"
+            cmp "$stage/tailhop" "$extracted/tailhop"
+            cmp LICENSE "$extracted/LICENSE"
+          done
+          cd "$out"
+          sha256sum "tailhop_${VERSION}_linux_amd64.tar.gz" \
+            "tailhop_${VERSION}_linux_arm64.tar.gz" > checksums.txt
+          sha256sum --check checksums.txt
+      - name: Upload private build artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tailhop-linux-binaries-${{ steps.version.outputs.version }}
+          path: |
+            ${{ runner.temp }}/tailhop-linux-binaries/tailhop_${{ steps.version.outputs.version }}_linux_amd64.tar.gz
+            ${{ runner.temp }}/tailhop-linux-binaries/tailhop_${{ steps.version.outputs.version }}_linux_arm64.tar.gz
+            ${{ runner.temp }}/tailhop-linux-binaries/checksums.txt
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

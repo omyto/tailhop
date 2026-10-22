@@ -58,9 +58,8 @@ def update(api, tag, version, commit, directory):
     names = [f'tailhop_{version}_linux_{arch}.tar.gz' for arch in ('amd64', 'arm64')]
     contents = {name: (directory / name).read_bytes() for name in names}
     manifest = ''.join(f'{digest(contents[name])[7:]}  {name}\n' for name in names)
-    contents['checksums.txt'] = (directory / 'checksums.txt').read_bytes()
-    if contents['checksums.txt'] != manifest.encode() or not all(contents.values()):
-        raise RuntimeError('Release files do not match checksums.txt')
+    if (directory / 'archive-sha256.txt').read_bytes() != manifest.encode() or not all(contents.values()):
+        raise RuntimeError('Release files do not match archive-sha256.txt')
 
     # Recheck the existing remote tag against the commit actually built.
     obj = api.request('GET', f'{api.root}/git/ref/tags/{tag}')['object']
@@ -101,6 +100,22 @@ def update(api, tag, version, commit, directory):
         api.request('PATCH', f'{api.root}/releases/assets/{asset_id}', {'name': name})
 
     current = assets()
+    # Recognize only a legacy manifest whose digest matches the exact old
+    # archive hashes/names. Backups allow recovery if a previous cleanup failed.
+    legacy = current.get('checksums.txt')
+    known_legacy = False
+    prefixes = {''}
+    for name in current:
+        match = re.match(r'(tailhop-backup-[0-9a-f]{32}-)tailhop_', name)
+        if match:
+            prefixes.add(match[1])
+    for prefix in prefixes:
+        old = [current.get(prefix + name, current.get(name)) for name in names]
+        if all(a and re.fullmatch(r'sha256:[0-9a-f]{64}', a.get('digest') or '') for a in old):
+            previous = ''.join(f"{a['digest'][7:]}  {name}\n" for name, a in zip(names, old)).encode()
+            if legacy and legacy['state'] == 'uploaded' and legacy['size'] == len(previous) and legacy.get('digest') == digest(previous):
+                known_legacy = True
+                break
     pending = []
     batch = uuid.uuid4().hex
     # Stage and verify ALL changed uploads before touching canonical names.
@@ -139,8 +154,13 @@ def update(api, tag, version, commit, directory):
         raise
 
     # Only after the complete new set is verified may old backups be deleted.
+    if known_legacy:
+        rename(legacy['id'], f'tailhop-backup-{batch}-checksums.txt')
+        final = assets()
+    elif legacy:
+        print('Retaining unrecognized checksums.txt attachment; review it manually')
     managed = re.compile(r'tailhop-(staging|backup)-[0-9a-f]{32}-(' +
-                         '|'.join(re.escape(name) for name in contents) + r')')
+                         '|'.join(re.escape(name) for name in [*contents, 'checksums.txt']) + r')')
     for name, asset in final.items():
         if managed.fullmatch(name):
             draft()

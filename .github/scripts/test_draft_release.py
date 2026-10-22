@@ -8,7 +8,7 @@ from draft_release import API, digest, update
 
 TAG = 'v0.1.0'
 COMMIT = 'a' * 40
-NAMES = ['tailhop_0.1.0_linux_amd64.tar.gz', 'tailhop_0.1.0_linux_arm64.tar.gz', 'checksums.txt']
+NAMES = ['tailhop_0.1.0_linux_amd64.tar.gz', 'tailhop_0.1.0_linux_arm64.tar.gz']
 
 
 class FakeAPI:
@@ -92,7 +92,7 @@ class DraftReleaseTests(unittest.TestCase):
         for name in NAMES[:2]:
             (self.directory / name).write_bytes(name.encode())
         manifest = ''.join(f'{digest((self.directory / name).read_bytes())[7:]}  {name}\n' for name in NAMES[:2])
-        (self.directory / 'checksums.txt').write_text(manifest)
+        (self.directory / 'archive-sha256.txt').write_text(manifest)
         self.api = FakeAPI()
 
     def run_update(self):
@@ -121,7 +121,7 @@ class DraftReleaseTests(unittest.TestCase):
         self.api.asset('operator-notes.txt', b'keep')
         self.run_update()
         methods = [method for method, _, _ in self.api.calls]
-        self.assertEqual(methods[:methods.index('PATCH')].count('POST'), 3)
+        self.assertEqual(methods[:methods.index('PATCH')].count('POST'), 2)
         self.assertTrue(all(a['id'] not in self.api.assets for a in old.values()))
         self.assertTrue(any(a['name'] == 'operator-notes.txt' for a in self.api.assets.values()))
         self.assertEqual(len(self.api.releases), 1)
@@ -191,14 +191,14 @@ class DraftReleaseTests(unittest.TestCase):
         self.assertEqual(self.api.releases, [])
 
     def test_bad_checksums_fail_before_any_api_call(self):
-        (self.directory / 'checksums.txt').write_text('bad')
-        with self.assertRaisesRegex(RuntimeError, 'checksums'):
+        (self.directory / 'archive-sha256.txt').write_text('bad')
+        with self.assertRaisesRegex(RuntimeError, 'archive-sha256'):
             self.run_update()
         self.assertEqual(self.api.calls, [])
 
     def test_missing_asset_is_added_without_replacing_identical_assets(self):
         self.api.release()
-        originals = [self.api.asset(name, (self.directory / name).read_bytes()) for name in NAMES[:2]]
+        originals = [self.api.asset(name, (self.directory / name).read_bytes()) for name in NAMES[:1]]
         self.run_update()
         self.assert_complete()
         self.assertEqual(self.api.uploads, 1)
@@ -243,6 +243,63 @@ class DraftReleaseTests(unittest.TestCase):
         self.api.request = annotated
         self.run_update()
         self.assert_complete()
+
+    def legacy_asset(self):
+        manifest = ''.join(f"{self.api.assets[a]['digest'][7:]}  {name}\n"
+                           for name in NAMES for a in self.api.assets
+                           if self.api.assets[a]['name'] == name)
+        return self.api.asset('checksums.txt', manifest.encode())
+
+    def test_known_legacy_manifest_removed_after_verified_replacement(self):
+        self.old_assets()
+        legacy = self.legacy_asset()
+        self.run_update()
+        self.assertNotIn(legacy['id'], self.api.assets)
+        self.assert_complete()
+
+    def test_legacy_manifest_retained_on_upload_failure(self):
+        self.old_assets()
+        legacy = self.legacy_asset()
+        self.api.fail_upload = 2
+        with self.assertRaisesRegex(RuntimeError, 'Upload failed'):
+            self.run_update()
+        self.assertEqual(self.api.assets[legacy['id']]['name'], 'checksums.txt')
+        self.api.fail_upload = None
+        self.run_update()
+        self.assert_complete()
+
+    def test_unrecognized_checksum_attachment_is_preserved(self):
+        self.old_assets()
+        legacy = self.api.asset('checksums.txt', b'operator-owned content')
+        self.run_update()
+        self.assertEqual(self.api.assets[legacy['id']]['name'], 'checksums.txt')
+
+    def test_interrupted_legacy_cleanup_recovers_using_archive_backups(self):
+        self.old_assets()
+        self.legacy_asset()
+        original = self.api.request
+        failed = False
+
+        def interrupt(method, path, data=None, content=None):
+            nonlocal failed
+            if method == 'PATCH' and data['name'].endswith('-checksums.txt') and not failed:
+                failed = True
+                raise RuntimeError('Legacy rename failed')
+            return original(method, path, data, content)
+
+        self.api.request = interrupt
+        with self.assertRaisesRegex(RuntimeError, 'Legacy rename failed'):
+            self.run_update()
+        self.run_update()
+        self.assert_complete()
+
+    def test_published_release_keeps_legacy_manifest(self):
+        self.old_assets()
+        legacy = self.legacy_asset()
+        self.api.releases[0]['draft'] = False
+        with self.assertRaisesRegex(RuntimeError, 'published'):
+            self.run_update()
+        self.assertIn(legacy['id'], self.api.assets)
 
     def test_api_pagination(self):
         api = API.__new__(API)

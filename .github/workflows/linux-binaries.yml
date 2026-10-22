@@ -52,6 +52,14 @@ jobs:
           commit=$(git rev-parse --verify --end-of-options "refs/tags/${RELEASE_TAG}^{commit}")
           test "$(git rev-parse HEAD)" = "$commit"
           printf 'commit=%s\n' "$commit" >> "$GITHUB_OUTPUT"
+      - name: Check tagged installation inputs
+        run: |
+          for file in LICENSE INSTALL.md packaging/systemd/tailhop.service packaging/systemd/tailhop.env.example; do
+            if ! git cat-file -e "HEAD:$file"; then
+              echo "::error::Release tag lacks $file; use a tag containing the self-contained installation files."
+              exit 1
+            fi
+          done
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -79,6 +87,8 @@ jobs:
           work=$(mktemp -d)
           trap 'rm -rf "$work"' EXIT
           epoch=$(git show -s --format=%ct HEAD)
+          files=(tailhop LICENSE INSTALL.md packaging/systemd/tailhop.service packaging/systemd/tailhop.env.example)
+          printf '%s\n' "${files[@]}" checksums.txt | LC_ALL=C sort > "$work/expected-files"
           for arch in amd64 arm64; do
             stage="$work/$arch"
             mkdir -p "$stage"
@@ -91,23 +101,29 @@ jobs:
             printf '%s\n' "$info" | grep -Eq '^[[:space:]]*build[[:space:]]+GOOS=linux$'
             printf '%s\n' "$info" | grep -Eq "^[[:space:]]*build[[:space:]]+GOARCH=$arch$"
             printf '%s\n' "$info" | grep -Eq '^[[:space:]]*build[[:space:]]+CGO_ENABLED=0$'
-            install -m 0644 LICENSE "$stage/LICENSE"
+            for file in "${files[@]:1}"; do
+              install -D -m 0644 "$file" "$stage/$file"
+            done
+            (cd "$stage" && sha256sum "${files[@]}" > checksums.txt)
             archive="$out/tailhop_${VERSION}_linux_${arch}.tar.gz"
             tar --sort=name --mtime="@$epoch" --owner=0 --group=0 --numeric-owner \
-              -C "$stage" -cf - tailhop LICENSE | gzip -n > "$archive"
-            test "$(tar -tzf "$archive" | LC_ALL=C sort)" = $'LICENSE\ntailhop'
+              -C "$stage" -cf - "${files[@]}" checksums.txt | gzip -n > "$archive"
+            tar -tzf "$archive" | LC_ALL=C sort > "$work/actual-files"
+            cmp "$work/expected-files" "$work/actual-files"
             extracted="$work/extracted-$arch"
             mkdir -p "$extracted"
             tar --no-same-owner -xzf "$archive" -C "$extracted"
             test -s "$extracted/tailhop" && test -x "$extracted/tailhop"
-            test -f "$extracted/LICENSE"
-            cmp "$stage/tailhop" "$extracted/tailhop"
-            cmp LICENSE "$extracted/LICENSE"
+            for file in "${files[@]}" checksums.txt; do
+              test -f "$extracted/$file" && test ! -L "$extracted/$file"
+              cmp "$stage/$file" "$extracted/$file"
+            done
+            (cd "$extracted" && sha256sum --check checksums.txt)
           done
           cd "$out"
           sha256sum "tailhop_${VERSION}_linux_amd64.tar.gz" \
-            "tailhop_${VERSION}_linux_arm64.tar.gz" > checksums.txt
-          sha256sum --check checksums.txt
+            "tailhop_${VERSION}_linux_arm64.tar.gz" > archive-sha256.txt
+          sha256sum --check archive-sha256.txt
       - name: Upload private build artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -115,7 +131,7 @@ jobs:
           path: |
             ${{ runner.temp }}/tailhop-linux-binaries/tailhop_${{ steps.version.outputs.version }}_linux_amd64.tar.gz
             ${{ runner.temp }}/tailhop-linux-binaries/tailhop_${{ steps.version.outputs.version }}_linux_arm64.tar.gz
-            ${{ runner.temp }}/tailhop-linux-binaries/checksums.txt
+            ${{ runner.temp }}/tailhop-linux-binaries/archive-sha256.txt
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
@@ -143,7 +159,7 @@ jobs:
           path: ${{ runner.temp }}/tailhop-linux-binaries
       - name: Verify artifact checksums
         working-directory: ${{ runner.temp }}/tailhop-linux-binaries
-        run: sha256sum --check checksums.txt
+        run: sha256sum --check archive-sha256.txt
       - name: Create or update draft assets
         env:
           GITHUB_TOKEN: ${{ github.token }}

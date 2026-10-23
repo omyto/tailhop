@@ -21,6 +21,8 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
       commit: ${{ steps.source.outputs.commit }}
+      amd64_sha256: ${{ steps.archives.outputs.amd64_sha256 }}
+      arm64_sha256: ${{ steps.archives.outputs.arm64_sha256 }}
     env:
       CGO_ENABLED: '1'
     steps:
@@ -78,6 +80,7 @@ jobs:
       - name: Race test
         run: go test -race ./...
       - name: Build and verify archives
+        id: archives
         env:
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
@@ -89,7 +92,7 @@ jobs:
           trap 'rm -rf "$work"' EXIT
           epoch=$(git show -s --format=%ct HEAD)
           files=(tailhop LICENSE INSTALL.md packaging/systemd/tailhop.service packaging/systemd/tailhop.env.example)
-          printf '%s\n' "${files[@]}" checksums.txt | LC_ALL=C sort > "$work/expected-files"
+          printf '%s\n' "${files[@]}" | LC_ALL=C sort > "$work/expected-files"
           for arch in amd64 arm64; do
             stage="$work/$arch"
             mkdir -p "$stage"
@@ -105,44 +108,43 @@ jobs:
             for file in "${files[@]:1}"; do
               install -D -m 0644 "$file" "$stage/$file"
             done
-            (cd "$stage" && sha256sum "${files[@]}" > checksums.txt)
             archive="$out/tailhop_${VERSION}_linux_${arch}.tar.gz"
             tar --sort=name --mtime="@$epoch" --owner=0 --group=0 --numeric-owner \
-              -C "$stage" -cf - "${files[@]}" checksums.txt | gzip -n > "$archive"
+              -C "$stage" -cf - "${files[@]}" | gzip -n > "$archive"
             tar -tzf "$archive" | LC_ALL=C sort > "$work/actual-files"
             cmp "$work/expected-files" "$work/actual-files"
             extracted="$work/extracted-$arch"
             mkdir -p "$extracted"
             tar --no-same-owner -xzf "$archive" -C "$extracted"
             test -s "$extracted/tailhop" && test -x "$extracted/tailhop"
-            for file in "${files[@]}" checksums.txt; do
-              test -f "$extracted/$file" && test ! -L "$extracted/$file"
-              cmp "$stage/$file" "$extracted/$file"
-            done
+            verify_files() {
+              for file in "${files[@]}"; do
+                test -f "$extracted/$file" && test ! -L "$extracted/$file" && \
+                  cmp "$stage/$file" "$extracted/$file" || return 1
+              done
+            }
+            verify_files
             for file in "${files[@]:1}"; do
               cmp "$file" "$extracted/$file"
             done
-            (cd "$extracted" && sha256sum --check checksums.txt)
-            # Prove verification rejects corruption and a missing included file.
-            printf '\nchecksum failure test\n' >> "$extracted/packaging/systemd/tailhop.env.example"
-            if (cd "$extracted" && sha256sum --check checksums.txt > "$work/corrupt.log" 2>&1); then
-              echo '::error::Checksum verification accepted a modified file'
+            # Prove byte comparison rejects corruption and a missing included file.
+            printf '\nintegrity failure test\n' >> "$extracted/packaging/systemd/tailhop.env.example"
+            if verify_files > "$work/corrupt.log" 2>&1; then
+              echo '::error::File verification accepted a modified file'
               exit 1
             fi
             cp "$stage/packaging/systemd/tailhop.env.example" "$extracted/packaging/systemd/tailhop.env.example"
             rm "$extracted/INSTALL.md"
-            if (cd "$extracted" && sha256sum --check checksums.txt > "$work/missing.log" 2>&1); then
-              echo '::error::Checksum verification accepted a missing file'
+            if verify_files > "$work/missing.log" 2>&1; then
+              echo '::error::File verification accepted a missing file'
               exit 1
             fi
             cp "$stage/INSTALL.md" "$extracted/INSTALL.md"
-            (cd "$extracted" && sha256sum --check checksums.txt)
-            echo "Verified Linux $arch archive, tagged installation files, and checksum failure cases"
+            verify_files
+            hash=$(sha256sum "$archive")
+            printf '%s_sha256=%s\n' "$arch" "${hash%% *}" >> "$GITHUB_OUTPUT"
+            echo "Verified Linux $arch archive, tagged installation files, and integrity failure cases"
           done
-          cd "$out"
-          sha256sum "tailhop_${VERSION}_linux_amd64.tar.gz" \
-            "tailhop_${VERSION}_linux_arm64.tar.gz" > archive-sha256.txt
-          sha256sum --check archive-sha256.txt
       - name: Upload private build artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -150,7 +152,6 @@ jobs:
           path: |
             ${{ runner.temp }}/tailhop-linux-binaries/tailhop_${{ steps.version.outputs.version }}_linux_amd64.tar.gz
             ${{ runner.temp }}/tailhop-linux-binaries/tailhop_${{ steps.version.outputs.version }}_linux_arm64.tar.gz
-            ${{ runner.temp }}/tailhop-linux-binaries/archive-sha256.txt
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
@@ -176,14 +177,13 @@ jobs:
         with:
           name: tailhop-linux-binaries-${{ needs.build.outputs.version }}
           path: ${{ runner.temp }}/tailhop-linux-binaries
-      - name: Verify artifact checksums
-        working-directory: ${{ runner.temp }}/tailhop-linux-binaries
-        run: sha256sum --check archive-sha256.txt
       - name: Create or update draft assets
         env:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.build.outputs.tag }}
           VERSION: ${{ needs.build.outputs.version }}
           SOURCE_COMMIT: ${{ needs.build.outputs.commit }}
+          AMD64_SHA256: ${{ needs.build.outputs.amd64_sha256 }}
+          ARM64_SHA256: ${{ needs.build.outputs.arm64_sha256 }}
           ASSET_DIR: ${{ runner.temp }}/tailhop-linux-binaries
         run: python3 .github/scripts/draft_release.py

@@ -6,23 +6,24 @@ No Go, Git, Docker, TUN device, or separate tailscaled process is required.
 
 ## Extract and verify
 
-Download one architecture archive from a trusted maintainer. For example:
+Download one architecture archive from a trusted maintainer. Compare its hash
+with the SHA-256 digest displayed for that asset on GitHub (ignore the
+`sha256:` prefix when comparing). For example:
+
+```sh
+sha256sum tailhop_0.1.0_linux_amd64.tar.gz
+```
+
+Use the actual version and architecture in the filename. Stop if the digest
+differs. Trust the source of the GitHub digest as well as the download; a matching
+hash checks the downloaded bytes, not whether the software itself is safe.
+No checksum manifest is distributed. After verifying the archive, extract it:
 
 ```sh
 mkdir tailhop-install
 tar -xzf tailhop_0.1.0_linux_amd64.tar.gz -C tailhop-install
 cd tailhop-install
-sha256sum --check checksums.txt
 ```
-
-Use the actual version and architecture in the filename. Stop if verification
-fails. The manifest checks every other included file, including the executable,
-this guide, LICENSE, and the two files under `packaging/systemd/`.
-
-Internal checksums detect missing/corrupt files; they cannot authenticate the
-archive containing them. Compare `sha256sum` of the downloaded archive with an
-independently obtained trusted digest (for example its GitHub release asset
-SHA-256 digest). Obtain both archive and digest through trusted access.
 
 Choose direct execution or the systemd service below. Run commands from this
 extracted directory. Only the systemd administration commands need sudo.
@@ -146,8 +147,8 @@ one peer can consume the global connection limit. Restrict access accordingly.
 
 ## Update or uninstall
 
-For an update, extract the new archive into a fresh directory and verify its
-checksums as above. Then, from that directory:
+For an update, verify the new archive against its GitHub asset digest, then
+extract it into a fresh directory as above. Then, from that directory:
 
 ```sh
 sudo systemctl stop tailhop

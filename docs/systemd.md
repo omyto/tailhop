@@ -8,7 +8,7 @@ For prebuilt Linux binaries, start with the bundled [INSTALL.md](../INSTALL.md):
 
 ### Prebuilt Linux binary
 
-The binary workflow creates or updates a **GitHub Draft Release** after Go checks, package validation, and checksum verification succeed. It never publishes a release. The repository remains private, and draft assets are not publicly downloadable. An authorized maintainer can rebuild the existing tag without changing it:
+The binary workflow creates or updates a **GitHub Draft Release** after Go checks, package validation, and archive integrity verification succeed. It never publishes a release. The repository remains private, and draft assets are not publicly downloadable. An authorized maintainer can rebuild the existing tag without changing it:
 
 1. Make [linux-binaries.yml](../.github/workflows/linux-binaries.yml) available on the default branch for manual execution. Choose an existing stable release tag containing `INSTALL.md`, LICENSE, and both systemd packaging files. Everything bundled must come from that tagged source.
 2. Open **Actions → Linux binaries → Run workflow**. Select the default branch as the workflow source and enter the chosen tag in `release_tag`. The workflow checks out and verifies that exact tagged commit before testing/building. Do not repush, move, or recreate tags.
@@ -16,7 +16,7 @@ The binary workflow creates or updates a **GitHub Draft Release** after Go check
 
 The existing `v0.1.0` tag predates `INSTALL.md`. The new workflow deliberately rejects it rather than mixing old binaries with newer installation files. A maintainer must later choose a new version tag containing all required files; no existing tag should be moved.
 
-Draft release assets are separate from the temporary Actions artifact used between jobs. That artifact still requests 30-day retention, subject to repository policy; its expiration does not remove the draft assets. Drafts require authorized access and may be deleted by maintainers. Provide the selected single archive to an intended installer through a trusted channel. Each archive has an internal `checksums.txt`; there is no separate checksum release asset in the new format. The private `archive-sha256.txt` Actions handoff record verifies archive bytes between jobs, and uploads are checked against independently calculated GitHub asset digests.
+Draft release assets are separate from the temporary Actions artifact used between jobs. That artifact still requests 30-day retention, subject to repository policy; its expiration does not remove the draft assets. Drafts require authorized access and may be deleted by maintainers. Provide the selected single archive to an intended installer through a trusted channel. There are no checksum manifest files inside archives or as release assets. The build job passes each verified archive’s SHA-256 through workflow outputs; the release job verifies downloaded artifact bytes against those hashes before any release changes, and checks uploads against GitHub asset digests.
 
 The build job retains read-only repository permissions. Only the release job uses the built-in `GITHUB_TOKEN` with `contents: write`; repository policies must permit that access. No Docker Hub or Tailscale credentials are needed by the workflow.
 
@@ -30,12 +30,11 @@ Each archive includes:
 tailhop
 LICENSE
 INSTALL.md
-checksums.txt
 packaging/systemd/tailhop.service
 packaging/systemd/tailhop.env.example
 ```
 
-From the directory containing the downloaded archive, extract into a fresh directory and verify its included files:
+Before extracting, run `sha256sum` on the downloaded archive and compare the result with that asset’s SHA-256 digest on GitHub. Stop if it differs. Then extract into a fresh directory:
 
 ```sh
 printf 'Path to the downloaded Linux archive: '
@@ -43,10 +42,9 @@ IFS= read -r archive
 mkdir tailhop-install
 tar -xzf "$archive" -C tailhop-install
 cd tailhop-install
-sha256sum --check checksums.txt
 ```
 
-Stop if verification fails, then follow `INSTALL.md` in that directory. It needs no repository clone or extra configuration downloads. Internal checksums cover all other regular files, not the manifest itself, and detect corruption rather than authenticate their containing archive. Compare the archive's SHA-256 with an independently trusted digest, such as its GitHub asset digest, before trusting its contents.
+Follow `INSTALL.md` in that directory. It needs no repository clone or extra configuration downloads. Obtain the archive and GitHub digest through trusted access; digest matching verifies bytes, not software safety.
 
 ### Build from source
 
@@ -112,7 +110,7 @@ sudo systemctl stop tailhop
 
 ## Update
 
-Prepare `./tailhop` before stopping the service. For a prebuilt update, obtain the new matching architecture archive, then repeat extraction and its internal checksum verification as described in the bundled `INSTALL.md`. Stop if verification fails. For a source update, build the desired checkout:
+Prepare `./tailhop` before stopping the service. For a prebuilt update, obtain the new matching architecture archive, then compare its SHA-256 with the GitHub asset digest before extracting, as described in the bundled `INSTALL.md`. Stop if verification fails. For a source update, build the desired checkout:
 
 ```sh
 mise exec -- go build -trimpath -o tailhop ./cmd/tailhop

@@ -91,12 +91,11 @@ class DraftReleaseTests(unittest.TestCase):
         self.directory = Path(self.temp.name)
         for name in NAMES[:2]:
             (self.directory / name).write_bytes(name.encode())
-        manifest = ''.join(f'{digest((self.directory / name).read_bytes())[7:]}  {name}\n' for name in NAMES[:2])
-        (self.directory / 'archive-sha256.txt').write_text(manifest)
+        self.expected = {name: digest((self.directory / name).read_bytes()) for name in NAMES}
         self.api = FakeAPI()
 
     def run_update(self):
-        update(self.api, TAG, '0.1.0', COMMIT, self.directory)
+        update(self.api, TAG, '0.1.0', COMMIT, self.directory, self.expected)
 
     def old_assets(self):
         self.api.release()
@@ -190,9 +189,9 @@ class DraftReleaseTests(unittest.TestCase):
             self.run_update()
         self.assertEqual(self.api.releases, [])
 
-    def test_bad_checksums_fail_before_any_api_call(self):
-        (self.directory / 'archive-sha256.txt').write_text('bad')
-        with self.assertRaisesRegex(RuntimeError, 'archive-sha256'):
+    def test_bad_build_digest_fails_before_any_api_call(self):
+        self.expected[NAMES[0]] = 'sha256:' + '0' * 64
+        with self.assertRaisesRegex(RuntimeError, 'verified build digest'):
             self.run_update()
         self.assertEqual(self.api.calls, [])
 
@@ -202,10 +201,16 @@ class DraftReleaseTests(unittest.TestCase):
                 path = self.directory / name
                 original = path.read_bytes()
                 path.write_bytes(original + b'corruption')
-                with self.assertRaisesRegex(RuntimeError, 'archive-sha256'):
+                with self.assertRaisesRegex(RuntimeError, 'verified build digest'):
                     self.run_update()
                 self.assertEqual(self.api.calls, [])
                 path.write_bytes(original)
+
+    def test_missing_build_digest_fails_before_any_api_call(self):
+        self.expected.pop(NAMES[1])
+        with self.assertRaisesRegex(RuntimeError, 'integrity metadata'):
+            self.run_update()
+        self.assertEqual(self.api.calls, [])
 
     def test_missing_asset_is_added_without_replacing_identical_assets(self):
         self.api.release()

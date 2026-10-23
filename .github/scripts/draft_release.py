@@ -52,14 +52,16 @@ def digest(content):
     return 'sha256:' + hashlib.sha256(content).hexdigest()
 
 
-def update(api, tag, version, commit, directory):
+def update(api, tag, version, commit, directory, expected_digests):
     if not re.fullmatch(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', tag) or tag != 'v' + version:
         raise RuntimeError('Invalid release version')
     names = [f'tailhop_{version}_linux_{arch}.tar.gz' for arch in ('amd64', 'arm64')]
     contents = {name: (directory / name).read_bytes() for name in names}
-    manifest = ''.join(f'{digest(contents[name])[7:]}  {name}\n' for name in names)
-    if (directory / 'archive-sha256.txt').read_bytes() != manifest.encode() or not all(contents.values()):
-        raise RuntimeError('Release files do not match archive-sha256.txt')
+    if set(expected_digests) != set(names) or not all(contents.values()):
+        raise RuntimeError('Missing archive integrity metadata or empty archive')
+    if any(not re.fullmatch(r'sha256:[0-9a-f]{64}', expected_digests[name])
+           or digest(contents[name]) != expected_digests[name] for name in names):
+        raise RuntimeError('Archive does not match the verified build digest')
 
     # Recheck the existing remote tag against the commit actually built.
     obj = api.request('GET', f'{api.root}/git/ref/tags/{tag}')['object']
@@ -172,7 +174,10 @@ def update(api, tag, version, commit, directory):
 if __name__ == '__main__':
     try:
         update(API(), os.environ['RELEASE_TAG'], os.environ['VERSION'],
-               os.environ['SOURCE_COMMIT'], Path(os.environ['ASSET_DIR']))
+               os.environ['SOURCE_COMMIT'], Path(os.environ['ASSET_DIR']),
+               {f"tailhop_{os.environ['VERSION']}_linux_{arch}.tar.gz":
+                'sha256:' + os.environ[f'{arch.upper()}_SHA256']
+                for arch in ('amd64', 'arm64')})
     except Exception as error:
         print(f'::error::Draft release update failed: {error}', file=sys.stderr)
         sys.exit(1)

@@ -1,16 +1,7 @@
-# Select an explicitly published version in .env; no latest tag is assumed.
 services:
   tailhop:
-    image: "omyto/tailhop:${TAILHOP_VERSION:?Set TAILHOP_VERSION to a published version such as 0.1.0}"
+    image: omyto/tailhop:latest
     restart: unless-stopped
-    environment:
-      TS_AUTHKEY: ${TS_AUTHKEY:-}
-      TS_HOSTNAME: ${TS_HOSTNAME:-tailhop}
-      TS_STATE_DIR: /var/lib/tailhop
-      PROXY_PORT: ${PROXY_PORT:-8080}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      MAX_CLIENTS: ${MAX_CLIENTS:-100}
-      IDLE_TIMEOUT: ${IDLE_TIMEOUT:-10m}
     volumes:
       - state:/var/lib/tailhop
     stop_grace_period: 20s

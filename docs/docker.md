@@ -313,21 +313,21 @@ Keep the same project-scoped state volume across builds.
 Run source tests with the toolchain required by `go.mod`:
 
 ```sh
-mise exec -- go test ./...
-mise exec -- go test -race ./...
+go test ./...
+go test -race ./...
 ```
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for formatting, vet, and test requirements.
 
 ## Maintainer release checklist
 
-1. Use the official public Docker Hub repository `omyto/tailhop`. Keep the GitHub source repository private.
+1. Use the official public Docker Hub repository `omyto/tailhop` and the [source repository](https://github.com/omyto/tailhop). Resolve [outstanding licensing items](licensing.md) before public redistribution.
 2. In GitHub repository Settings → Secrets and variables → Actions, set repository variable `DOCKERHUB_USERNAME` to `omyto` (publisher-side configuration, not an end-user `.env` setting) and repository secret `DOCKERHUB_TOKEN` to a Docker Hub access token with the read/write access needed to push. Never commit the token or pass it as a build argument. No Tailscale Auth Key is needed by CI or image builds.
-3. Enable GitHub Actions for the private repository and allow the pinned official GitHub/Docker actions. Review runner/billing availability, limit who may push version tags, and run the branch CI before release. Keep action SHA pins updated deliberately.
+3. Enable GitHub Actions for the repository and allow the pinned official GitHub/Docker actions. Review runner/billing availability, limit who may push version tags, and run the branch CI before release. Keep action SHA pins updated deliberately.
 4. Commit and review release changes through the normal repository process. Publish only a new stable version tag containing the intended changes. Never move, repush, or recreate an already published tag.
 5. Watch the [publishing workflow](../.github/workflows/docker-publish.yml). It validates stable `vMAJOR.MINOR.PATCH` tags, rejects leading zeros/prereleases/build metadata, and runs formatting, vet, unit tests, and race tests before the publish job. Ordinary branch pushes and pull requests cannot publish. A Git tag such as `v0.1.0` publishes `omyto/tailhop:0.1.0`. The same multi-platform build/push also updates `omyto/tailhop:latest`, following the publication-order behavior described under [image tags](#image-tags). No automatic GitHub Release is created.
 6. Check the resulting Docker Hub tag and its `linux/amd64` and `linux/arm64` manifest entries. Select the published version in the image reference, then pull and start using the prebuilt commands above. On each target architecture, verify non-root startup, first-run state permissions, HTTP/HTTPS forwarding, ACL enforcement, identity after a keyless restart, and clean shutdown. Use the [manual checks](#manual-verification); multi-platform runtime validation remains manual.
 
-The workflow sets application version/license OCI labels. It uses a local checked-out build context, disables Git labels/information, provenance and SBOM attestations, and build-record artifact uploads to avoid publishing private repository/build metadata. See [Docker's attestation documentation](https://docs.docker.com/build/ci/github-actions/attestations/) for the default behavior. Review image configuration/history and manifest metadata before announcing the release. Private Actions logs remain subject to GitHub repository access controls.
+The workflow sets application version/license OCI labels. It uses a local checked-out build context, disables Git labels/information, provenance and SBOM attestations, and build-record artifact uploads to avoid publishing unintended source/build metadata. See [Docker's attestation documentation](https://docs.docker.com/build/ci/github-actions/attestations/) for the default behavior. Review image configuration/history and manifest metadata before announcing the release. Review Actions logs for secrets before making repository history public.
 
-The build context allows only the current Go packages, module files, and Dockerfile. Add new build packages/assets explicitly to `.dockerignore`; do not include environments, credentials, or tsnet state. Keeping the source repository private does not make the distributed binary private: anyone can pull and inspect the public image and binary, including Go dependency/build information.
+The build context allows only the current Go packages, module files, Dockerfile, and required license materials. Add new build packages/assets explicitly to `.dockerignore`; do not include environments, credentials, or tsnet state. Anyone can inspect public images and binaries, including Go dependency/build information. Tailhop license materials are installed under `/usr/share/doc/tailhop/`; Debian package notices are retained separately.

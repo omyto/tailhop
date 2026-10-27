@@ -34,3 +34,9 @@ go.work.sum
 
 /state/
 /bin/
+
+# Local outputs from the documented build/test commands.
+/tailhop
+/dist/
+__pycache__/
+*.pyc

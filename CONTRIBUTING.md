@@ -7,17 +7,30 @@ for the implementation contract and scope before proposing behavioral changes.
 
 ## Build and test
 
-Run from the repository root with the Go toolchain managed by mise. The module
-requires Go 1.27.3 and pins tailscale.com v1.104.1; the Docker builder uses Go 1.27.3.
-See [go.mod](go.mod) and [Dockerfile](Dockerfile) for the current requirements.
+Install Go 1.27.3 or newer and run these commands from the repository root.
+`go.mod` enforces 1.27.3 as the minimum security-patched toolchain; official CI,
+Linux release builds, and the Docker builder resolve to Go 1.27.3. A separate
+`toolchain` directive is unnecessary. Dependencies remain pinned in `go.mod` and
+`go.sum`. A version manager such as mise is optional.
 
 ```sh
-mise exec -- go build -trimpath -o tailhop ./cmd/tailhop
-mise exec -- gofmt -w ./cmd ./internal
-mise exec -- go vet ./...
-mise exec -- go test ./...
-mise exec -- go test -race ./...
+go build ./cmd/tailhop
+gofmt -l cmd internal
+go vet ./...
+go test ./...
+go test -race ./...
 ```
+
+For the Docker development workflow, build and run from the checkout:
+
+```sh
+docker compose -f compose.yaml up --build -d
+docker compose -f compose.yaml logs -f tailhop
+```
+
+No `.env` or auth key is required; complete browser enrollment when needed.
+See the [Docker development guide](docs/docker.md#development-build-from-source).
+End users should use the official prebuilt image rather than this build path.
 
 Race instrumentation requires CGO enabled and a C compiler. Tests use injected
 resolvers/dialers and test-local connections: no Tailnet credentials or public
@@ -42,3 +55,13 @@ examples against the repository. Deployment changes also need the manual checks 
 the [Docker guide](docs/docker.md#manual-verification) or
 [systemd guide](docs/systemd.md#manual-service-verification). Unit tests do not prove
 live enrollment, ACL enforcement, state permissions, or service sandbox compatibility.
+
+## Dependency licensing
+
+When changing dependencies or embedded assets, update
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) following the
+[licensing audit and maintenance process](docs/licensing.md). Keep upstream
+copyright/license texts and distinguish shipped code from test/build tools.
+Resolve the audit's outstanding browser-asset attribution before public release.
+Run `python3 -m unittest discover -s .github/scripts -p 'test_*.py'` for release
+and distribution checks; these do not contact Docker Hub or publish a release.

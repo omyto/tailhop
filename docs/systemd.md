@@ -4,19 +4,20 @@ The [service unit](../packaging/systemd/tailhop.service) runs the same executabl
 
 ## Obtain the executable
 
-For prebuilt Linux binaries, start with the bundled [INSTALL.md](../INSTALL.md): it covers direct execution and a complete systemd installation using only archive contents. Alternatively, build from source below. The target server needs Linux with systemd and CA certificates. A prebuilt installation requires neither Go nor Docker.
+Obtain prebuilt Linux archives from [GitHub Releases](https://github.com/omyto/tailhop/releases).
+Start with the bundled [INSTALL.md](../INSTALL.md): it covers direct execution and a complete systemd installation using only archive contents. Alternatively, build from source below. The target server needs Linux with systemd and CA certificates. A prebuilt installation requires neither Go nor Docker.
 
 ### Prebuilt Linux binary
 
-The binary workflow creates or updates a **GitHub Draft Release** after Go checks, package validation, and archive integrity verification succeed. It never publishes a release. The repository remains private, and draft assets are not publicly downloadable. An authorized maintainer can rebuild the existing tag without changing it:
+The binary workflow creates or updates a **GitHub Draft Release** after Go checks, package validation, and archive integrity verification succeed. It never publishes a release. Draft assets are not public downloads; a maintainer must review and publish a verified draft. An authorized maintainer can rebuild the existing tag without changing it:
 
-1. Make [linux-binaries.yml](../.github/workflows/linux-binaries.yml) available on the default branch for manual execution. Choose an existing stable release tag containing `INSTALL.md`, LICENSE, and both systemd packaging files. Everything bundled must come from that tagged source.
+1. Make [linux-binaries.yml](../.github/workflows/linux-binaries.yml) available on the default branch for manual execution. Choose an existing stable release tag containing `INSTALL.md`, `LICENSE`, `THIRD_PARTY_NOTICES`, and both systemd packaging files. Everything bundled must come from that tagged source.
 2. Open **Actions → Linux binaries → Run workflow**. Select the default branch as the workflow source and enter the chosen tag in `release_tag`. The workflow checks out and verifies that exact tagged commit before testing/building. Do not repush, move, or recreate tags.
 3. After both jobs succeed, open **Releases** and select the draft for that tag. Download only the archive matching the target machine: `tailhop_<version>_linux_amd64.tar.gz` for `x86_64`, or `tailhop_<version>_linux_arm64.tar.gz` for `aarch64` (`uname -m` identifies it).
 
-The existing `v0.1.0` tag predates `INSTALL.md`. The new workflow deliberately rejects it rather than mixing old binaries with newer installation files. A maintainer must later choose a new version tag containing all required files; no existing tag should be moved.
+The existing `v0.1.0` tag predates the installation guide and third-party notices. The workflow rejects tags missing required materials rather than mixing old binaries with newer files. A maintainer must later choose a new version tag containing all required files; no existing tag should be moved.
 
-Draft release assets are separate from the temporary Actions artifact used between jobs. That artifact still requests 30-day retention, subject to repository policy; its expiration does not remove the draft assets. Drafts require authorized access and may be deleted by maintainers. Provide the selected single archive to an intended installer through a trusted channel. There are no checksum manifest files inside archives or as release assets. The build job passes each verified archive’s SHA-256 through workflow outputs; the release job verifies downloaded artifact bytes against those hashes before any release changes, and checks uploads against GitHub asset digests.
+Draft release assets are separate from the temporary Actions artifact used between jobs. That artifact still requests 30-day retention, subject to repository policy; its expiration does not remove the draft assets. Drafts require authorized access and may be deleted by maintainers. After release review, publish the draft to make its archives available through the official Releases page. There are no checksum manifest files inside archives or as release assets. The build job passes each verified archive’s SHA-256 through workflow outputs; the release job verifies downloaded artifact bytes against those hashes before any release changes, and checks uploads against GitHub asset digests.
 
 The build job retains read-only repository permissions. Only the release job uses the built-in `GITHUB_TOKEN` with `contents: write`; repository policies must permit that access. No Docker Hub or Tailscale credentials are needed by the workflow.
 
@@ -29,6 +30,7 @@ Each archive includes:
 ```text
 tailhop
 LICENSE
+THIRD_PARTY_NOTICES
 INSTALL.md
 packaging/systemd/tailhop.service
 packaging/systemd/tailhop.env.example
@@ -48,10 +50,10 @@ Follow `INSTALL.md` in that directory. It needs no repository clone or extra con
 
 ### Build from source
 
-From the repository root, build as your regular user using mise:
+From the repository root, build as your regular user with Go 1.27.3 or newer:
 
 ```sh
-mise exec -- go build -trimpath -o tailhop ./cmd/tailhop
+go build -trimpath -o tailhop ./cmd/tailhop
 ```
 
 Continue with the same service installation below.
@@ -138,7 +140,7 @@ sudo systemctl stop tailhop
 Prepare `./tailhop` before stopping the service. For a prebuilt update, obtain the new matching architecture archive, then compare its SHA-256 with the GitHub asset digest before extracting, as described in the bundled `INSTALL.md`. Stop if verification fails. For a source update, build the desired checkout:
 
 ```sh
-mise exec -- go build -trimpath -o tailhop ./cmd/tailhop
+go build -trimpath -o tailhop ./cmd/tailhop
 ```
 
 For either method, keep /etc/tailhop/tailhop.env and /var/lib/tailhop intact, stop the service, replace only the executable, and restart:
@@ -176,6 +178,6 @@ A missing /usr/local/bin/tailhop before installation is an expected diagnostic; 
 
 After manual installation, check startup, journal output, state ownership (tailhop:tailhop, mode 0700), successful enrollment, ACL enforcement, and graceful shutdown on the actual host. Restart without an enrollment key and confirm the same Tailscale device identity. Verify the observed public IP matches the host’s actual egress path; VPNs and routing policy may affect it.
 
-## Future public distribution
+## Public distribution
 
-When the repository becomes public, maintainers may choose to publish a verified draft for public binary distribution. Drafts remain non-public until a maintainer publishes them; this workflow never performs that step. Cross-compilation and archive checks do not prove ARM64 runtime behavior; test enrollment, forwarding, persistence, and service lifecycle on both target architectures before distributing a build as verified.
+Maintainers may publish a verified draft for public binary distribution after completing the [licensing audit](licensing.md) and runtime checks. Drafts remain non-public until a maintainer publishes them; this workflow never performs that step. Cross-compilation and archive checks do not prove ARM64 runtime behavior; test enrollment, forwarding, persistence, and service lifecycle on both target architectures before distributing a build as verified.

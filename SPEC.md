@@ -94,7 +94,7 @@ Use `tsnet.Server.Listen("tcp", fmt.Sprintf(":%d", port))`; don't bind `0.0.0.0`
 - Apply IDLE_TIMEOUT to HTTP keep-alive and active HTTP request/response streaming. Use one timer on the admitted inbound connection, reset by successful reads or writes in either direction. Stalled uploads and response streams must close and release their MAX_CLIENTS slot. Full close must cancel forwarding even when an unfinished request body prevents net/http from detecting disconnect with its background reader.
 - Preserve the HTTP server's existing keep-alive timeout and ten-second ReadHeaderTimeout. Activity must not extend the fixed header deadline. Do not impose absolute body read/write deadlines: one-way uploads, downloads, and streaming/SSE must survive multiple inactivity intervals while traffic continues.
 - Synchronize timer resets, expiration and close; stale callbacks must recheck current activity and enabled/closed state before claiming terminal closure. Do not add a monitoring goroutine per connection.
-- CONNECT disables the HTTP timer before DNS/dialing and uses only its existing shared tunnel timer after hijacking. Successful forwarded writes in either direction reset it. On inactivity expiration close both peers. Preserve buffered bytes and TCP half-close. Resume HTTP tracking when an unsuccessful CONNECT returns to keep-alive; keep pending-dial cancellation and bounded outbound timeouts.
+- CONNECT disables the HTTP timer before DNS/dialing and uses only its existing shared tunnel timer after hijacking. Successful forwarded writes in either direction reset it. On inactivity expiration close both peers. Preserve buffered bytes and TCP half-close. Respect the patched Go HTTP server closing a connection after rejected CONNECT; keep pending-dial cancellation and bounded outbound timeouts.
 - MAX_CLIENTS defaults to 100 and limits are global, without per-Tailnet-client quotas or fairness; one client may consume all slots. Document restrictive Tailnet grants/ACLs and deployment resource limits. Inactivity closure need not return an HTTP error response: EOF/reset or a truncated response is acceptable.
 - Bound idle upstream HTTP connection count and idle time. Close idle transport connections on shutdown.
 - Start serving with `http.Server.Serve` on the admission-wrapped `tsnet` listener. Shutdown stops admission and cancels pending CONNECT DNS/dials immediately. Existing HTTP streams and tracked tunnels share a bounded graceful drain period; at the deadline cancel outbound HTTP operations, close server/client/tunnel connections, and do not wait beyond the budget. Observe handler completion within the budget. Never hold the proxy mutex while closing network connections. Prevent tunnel registration after shutdown starts. Close `tsnet.Server` after proxy cleanup.
@@ -167,10 +167,10 @@ Minimum coverage:
 Run and report:
 
 ```sh
-mise exec -- gofmt -w ./cmd ./internal
-mise exec -- go vet ./...
-mise exec -- go test ./...
-mise exec -- go test -race ./...
+gofmt -w ./cmd ./internal
+go vet ./...
+go test ./...
+go test -race ./...
 ```
 
 If dependency downloading, Docker, race instrumentation, or another environment constraint prevents a check, report it transparently; do not claim it passed. No real Tailnet test is mandatory in automated unit tests.

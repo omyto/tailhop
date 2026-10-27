@@ -6,7 +6,9 @@ No Go, Git, Docker, TUN device, or separate tailscaled process is required.
 
 ## Extract and verify
 
-Download one architecture archive from a trusted maintainer. Compare its hash
+Download the matching architecture archive from the official
+[GitHub Releases page](https://github.com/omyto/tailhop/releases). Public downloads
+require a public repository and a maintainer-published, verified release. Compare its hash
 with the SHA-256 digest displayed for that asset on GitHub (ignore the
 `sha256:` prefix when comparing). For example:
 
@@ -24,6 +26,11 @@ mkdir tailhop-install
 tar -xzf tailhop_0.1.0_linux_amd64.tar.gz -C tailhop-install
 cd tailhop-install
 ```
+
+The archive includes `tailhop`, `LICENSE`, `THIRD_PARTY_NOTICES`, this guide, and
+both files under `packaging/systemd/`. Keep the licensing materials when
+redistributing the executable; the notices retain upstream terms and identify
+outstanding attribution checks. They do not replace Tailhop's own MIT license.
 
 Choose direct execution or the systemd service below. Run commands from this
 extracted directory. Only the systemd administration commands need sudo.

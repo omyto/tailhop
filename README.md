@@ -59,7 +59,8 @@ configuration, Compose, upgrades, and source development.
 
 ## Run the Linux binary
 
-Extract a verified Linux release archive, then:
+Download the matching Linux archive from [GitHub Releases](https://github.com/omyto/tailhop/releases),
+verify it as described in [INSTALL.md](INSTALL.md), then extract it and run:
 
 ```bash
 ./tailhop --help
@@ -106,12 +107,17 @@ on the internet leg; HTTPS retains client-to-destination TLS.
 
 See the [security guide](docs/security.md) for boundaries, risks, and limitations.
 
+## Limitations
+
+Public destinations on ports 80 and 443 only. No SOCKS, UDP/QUIC, TLS interception,
+or per-user quotas; applications must explicitly use the HTTP proxy.
+
 ## Deployment and documentation
 
 - [Docker / Compose](docs/docker.md): prebuilt images, upgrades, and source development,
   with persistent state and no published ports or privileged runtime requirements.
 - [Linux binary installation](INSTALL.md): run directly or install as a systemd service.
-  The [systemd guide](docs/systemd.md) covers private builds and source installation.
+  The [systemd guide](docs/systemd.md) covers service setup and source installation.
 - [Configuration](docs/configuration.md): CLI flags, environment fallback, connection limits,
   and timeouts.
 
@@ -121,4 +127,6 @@ Focused fixes, tests, and documentation improvements are welcome. Read the
 [contributing guide](CONTRIBUTING.md) for build commands, tests, and pull request
 expectations. [SPEC.md](SPEC.md) provides the implementation reference.
 
-Released under the [MIT license](LICENSE).
+Released under the [MIT license](LICENSE). Third-party terms are retained in
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES); see the [licensing audit](docs/licensing.md)
+for outstanding pre-release attribution checks.

@@ -90,7 +90,7 @@ Continuous one-way uploads/downloads and streaming/SSE remain connected while da
 
 HTTP keep-alive retains its server idle timeout. The fixed ten-second header deadline remains effective even when partial header traffic resets inactivity. There are no absolute body read/write deadlines or per-connection monitoring goroutines; expiration rechecks current activity to avoid stale callbacks closing reused connections.
 
-CONNECT disables the HTTP timer before its bounded DNS/dial operation and uses its shared tunnel timer after hijacking. Successful forwarded writes to either peer reset tunnel inactivity; an inactive or stalled tunnel closes both peers. TCP half-close and early buffered bytes are preserved. Rejected CONNECT requests returning to HTTP keep-alive resume HTTP tracking. These are explicit socket/tunnel inactivity rules rather than a claim of identical Tinyproxy internals.
+CONNECT disables the HTTP timer before its bounded DNS/dial operation and uses its shared tunnel timer after hijacking. Successful forwarded writes to either peer reset tunnel inactivity; an inactive or stalled tunnel closes both peers. TCP half-close and early buffered bytes are preserved. The patched Go HTTP server closes the client connection after a rejected CONNECT; clients must reconnect before sending another request. These are explicit socket/tunnel inactivity rules rather than a claim of identical Tinyproxy internals.
 
 ## Forwarding and other timeouts
 

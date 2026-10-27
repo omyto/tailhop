@@ -16,25 +16,40 @@ Tailnet client ──► tailhop (tsnet) ──► Host/container egress ──�
 
 ## Quick start
 
-From a checkout of this repository, with Docker and Compose installed:
+Use the official [Docker Hub image](https://hub.docker.com/r/omyto/tailhop)
+with Docker and Compose installed; no source checkout or Go toolchain is needed.
+Obtain `compose.release.yaml` and `.env.example` from the maintainer and place
+both in a new deployment directory. Run from that directory:
 
 ```sh
 cp .env.example .env
 chmod 600 .env
 ```
 
-Edit `.env` and replace `TS_AUTHKEY` with a Tailscale Auth Key for initial
-node enrollment (not an API access token). Allow intended clients to reach this
-node on TCP 8080 through your Tailnet grants/ACLs, then start it:
+Edit `.env`: set `TAILHOP_VERSION` to an explicitly selected published tag from
+Docker Hub (there is no `latest` fallback), and replace `TS_AUTHKEY` with a
+Tailscale Auth Key for initial enrollment, not an API access token. Allow intended
+clients through Tailnet grants/ACLs on TCP 8080, then start:
 
 ```sh
-docker compose config --quiet
-docker compose up --build -d
-docker compose ps
-docker compose logs --tail=50
+docker compose -f compose.release.yaml config --quiet
+docker compose -f compose.release.yaml pull
+docker compose -f compose.release.yaml up -d
+docker compose -f compose.release.yaml ps
+docker compose -f compose.release.yaml logs --tail=50
 ```
 
-Compose builds from local source. Confirm the node appears in the Tailscale admin console. See the [Docker guide](docs/docker.md) for detailed setup and state persistence.
+Confirm the node in the Tailscale admin console. Remove `TS_AUTHKEY` from `.env`
+(and unset it in your shell if exported), then clear the container's environment:
+
+```sh
+docker compose -f compose.release.yaml up -d --force-recreate
+```
+
+For upgrades, change `TAILHOP_VERSION` in `.env`, pull, and recreate the container
+using the same project and state volume. Do not use `docker compose down -v`:
+it can delete the persisted Tailscale identity. See the [Docker guide](docs/docker.md)
+for upgrade commands and [source development](docs/docker.md#development-build-from-source).
 
 ## Run the Linux binary
 
@@ -86,7 +101,7 @@ See the [security guide](docs/security.md) for boundaries, risks, and limitation
 
 ## Deployment and documentation
 
-- [Docker / Compose](docs/docker.md): source builds and versioned image deployment,
+- [Docker / Compose](docs/docker.md): prebuilt images, upgrades, and source development,
   with persistent state and no published ports or privileged runtime requirements.
 - [Linux binary installation](INSTALL.md): run directly or install as a systemd service.
   The [systemd guide](docs/systemd.md) covers private builds and source installation.

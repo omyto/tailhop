@@ -41,6 +41,11 @@ from the old `/var/lib/tailhop` default must keep that path explicitly**, with
 A new path may create a new Tailscale node. Restart using the same state directory
 without TS_AUTHKEY after enrollment; see [INSTALL.md](../INSTALL.md).
 
+Docker's recommended `compose.release.yaml` pulls `omyto/tailhop` using the
+required `TAILHOP_VERSION` from Compose's `.env` (or shell environment); there is
+no version fallback or end-user Docker Hub username setting. `TAILHOP_VERSION`
+selects the image and is not read by Tailhop. The development `compose.yaml`
+builds local source instead. Both use the same application environment variables.
 Docker sets `TS_STATE_DIR=/var/lib/tailhop` and persists it in a volume. The
 packaged systemd unit fixes `--state-dir=/var/lib/tailhop`, so an environment
 variable cannot override it; `StateDirectory=tailhop` manages ownership.

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -121,5 +122,77 @@ func TestAllSettings(t *testing.T) {
 		if strings.Contains(err.Error()+out.String(), "secret-value") {
 			t.Fatal("exposed key")
 		}
+	}
+}
+
+func TestFlagErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		args   []string
+		reason string
+	}{
+		{"unknown", []string{"--max-client", "200"}, "flag provided but not defined: -max-client"},
+		{"missing", []string{"--hostname"}, "flag needs an argument: -hostname"},
+		{"auth assignment", []string{"--auth-key=secret-value"}, "flag provided but not defined: -auth-key"},
+		{"auth separate", []string{"--auth-key", "secret-value"}, "flag provided but not defined: -auth-key"},
+		{"malformed assignment", []string{"---auth-key=secret-value"}, "bad flag syntax: ---auth-key"},
+		{"secret as flag", []string{"--secret-value"}, "flag provided but not defined: -[redacted]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			_, err := parseConfig(tc.args, func(k string) string {
+				if k == "TS_AUTHKEY" {
+					return "secret-value"
+				}
+				return ""
+			}, &out)
+			if err == nil || !strings.Contains(err.Error(), tc.reason) || !strings.Contains(err.Error(), "tailhop --help") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if errors.Unwrap(err) == nil {
+				t.Fatal("lost original flag error")
+			}
+			if out.Len() != 0 {
+				t.Fatalf("unexpected usage output: %s", out.String())
+			}
+			if strings.Contains(err.Error(), "secret-value") {
+				t.Fatal("exposed auth key")
+			}
+		})
+	}
+}
+
+func TestCLIExitStatus(t *testing.T) {
+	if os.Getenv("TAILHOP_TEST_CLI") == "1" {
+		os.Args = []string{"tailhop", os.Getenv("TAILHOP_TEST_ARG")}
+		main()
+		os.Exit(0)
+	}
+	for _, arg := range []string{"--help", "-h", "--max-client=200", "--hostname", "--port=0"} {
+		t.Run(arg, func(t *testing.T) {
+			state := t.TempDir() + "/must-not-exist"
+			cmd := exec.Command(os.Args[0], "-test.run=^TestCLIExitStatus$")
+			cmd.Env = append(os.Environ(), "TAILHOP_TEST_CLI=1", "TAILHOP_TEST_ARG="+arg, "TS_AUTHKEY=secret-value", "TS_STATE_DIR="+state, "PROXY_PORT=invalid")
+			out, err := cmd.CombinedOutput()
+			help := arg == "--help" || arg == "-h"
+			if (err == nil) != help {
+				t.Fatalf("exit: %v; output: %s", err, out)
+			}
+			if !help {
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) || exit.ExitCode() != 1 {
+					t.Fatalf("exit: %v", err)
+				}
+			}
+			if strings.Contains(string(out), "secret-value") {
+				t.Fatal("exposed key")
+			}
+			if strings.Contains(string(out), "Usage:") != help {
+				t.Fatalf("unexpected usage output: %s", out)
+			}
+			if _, err := os.Stat(state); !os.IsNotExist(err) {
+				t.Fatalf("created state: %v", err)
+			}
+		})
 	}
 }

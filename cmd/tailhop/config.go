@@ -19,6 +19,17 @@ type config struct {
 	level              slog.Level
 }
 
+// Retain the original flag error for callers while keeping its display safe.
+type flagParseError struct {
+	cause  error
+	reason string
+}
+
+func (e flagParseError) Error() string {
+	return "invalid command-line flags: " + e.reason + "; run 'tailhop --help' for usage"
+}
+func (e flagParseError) Unwrap() error { return e.cause }
+
 // parseConfig performs no filesystem or network operations. Parse flag strings
 // before validating environment fallbacks so explicit flags can replace invalid values.
 func parseConfig(args []string, getenv func(string) string, output io.Writer) (config, error) {
@@ -35,17 +46,25 @@ func parseConfig(args []string, getenv func(string) string, output io.Writer) (c
 	} {
 		values[setting.env] = fs.String(setting.flag, setting.fallback, setting.usage)
 	}
-	fs.Usage = func() {
-		fmt.Fprintln(output, "Usage: tailhop [flags]\nCLI flags > non-empty environment variables > defaults.\nTS_AUTHKEY is environment-only for initial enrollment; no .env files are loaded.")
-		fs.SetOutput(output)
-		fs.PrintDefaults()
-		fs.SetOutput(io.Discard)
-	}
+	// Keep flag diagnostics quiet; only explicit help prints usage.
+	fs.Usage = func() {}
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
+			fmt.Fprintln(output, "Usage: tailhop [flags]\nCLI flags > non-empty environment variables > defaults.\nTS_AUTHKEY is environment-only for initial enrollment; no .env files are loaded.")
+			fs.SetOutput(output)
+			fs.PrintDefaults()
 			return config{}, err
 		}
-		return config{}, fmt.Errorf("invalid command-line flags; use --help for supported options")
+		reason := err.Error()
+		// flag includes the entire offending token for malformed syntax. Omit
+		// assigned values and redact the enrollment key even if used as a flag name.
+		if strings.HasPrefix(reason, "bad flag syntax:") {
+			reason, _, _ = strings.Cut(reason, "=")
+		}
+		if key := getenv("TS_AUTHKEY"); key != "" {
+			reason = strings.ReplaceAll(reason, key, "[redacted]")
+		}
+		return config{}, flagParseError{cause: err, reason: reason}
 	}
 	if fs.NArg() != 0 {
 		return config{}, fmt.Errorf("positional arguments are not supported")

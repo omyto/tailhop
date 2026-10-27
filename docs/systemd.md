@@ -180,4 +180,4 @@ After manual installation, check startup, journal output, state ownership (tailh
 
 ## Public distribution
 
-Maintainers may publish a verified draft for public binary distribution after completing the [licensing checks](../CONTRIBUTING.md#third-party-licenses) and runtime checks. Drafts remain non-public until a maintainer publishes them; this workflow never performs that step. Cross-compilation and archive checks do not prove ARM64 runtime behavior; test enrollment, forwarding, persistence, and service lifecycle on both target architectures before distributing a build as verified.
+Maintainers may publish a verified draft for public binary distribution after verifying bundled license materials and completing runtime checks. Drafts remain non-public until a maintainer publishes them; this workflow never performs that step. Cross-compilation and archive checks do not prove ARM64 runtime behavior; test enrollment, forwarding, persistence, and service lifecycle on both target architectures before distributing a build as verified.

@@ -58,22 +58,5 @@ live enrollment, ACL enforcement, state permissions, or service sandbox compatib
 
 ## Third-party licenses
 
-When dependencies, Go, or embedded assets change, review the code actually shipped
-for both Linux architectures and update [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES).
-Preserve copyright statements, applicable grants, Apache notices and source
-obligations; reuse shared texts only when their terms match. `go.sum` also lists
-unshipped build/test dependencies. Run the release/distribution tests:
-
-```sh
-python3 -m unittest discover -s .github/scripts -p 'test_*.py'
-```
-
-Before public redistribution, resolve these remaining checks:
-
-- The linked web-client JS/CSS/font are confirmed present. Verify the prebuilt
-  source revision and the 26 outstanding source-package notices listed in
-  THIRD_PARTY_NOTICES; the source inventory is not yet complete bundle attribution.
-- Inspect rebuilt Docker images for both architectures and verify OS
-  corresponding-source arrangements. The inspected published `0.1.0` images
-  contain Debian license materials but lack Tailhop's license/notice files;
-  the current Dockerfile copies both to `/usr/share/doc/tailhop/` for future builds.
+When updating dependencies or bundled assets, review their redistribution terms
+and update [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) as needed.

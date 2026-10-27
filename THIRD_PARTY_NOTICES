@@ -1,539 +1,12 @@
 THIRD-PARTY SOFTWARE NOTICES
 
-Tailhop is MIT licensed; see LICENSE. The components below accompany static
-Linux amd64/arm64 builds with Go 1.27.3. A source inventory may conservatively
-include code discarded by the linker. Build/test-only module-graph entries are
-not included. Web-client source entries are provisional pending the review below.
-
-Each component's referenced texts apply together. Identical grant/notice text is
-printed once; differing terms, copyright holders, appendices, author lists and
-patent grants are retained. Source paths refer to the listed upstream version.
-Go module sources: https://proxy.golang.org/<module>/@v/<version>.zip
-Go source: https://go.dev/dl/go1.27.3.src.tar.gz
-
-Docker images must also retain their OS package copyright/license files under
-/usr/share/doc and /usr/share/common-licenses, and satisfy applicable matching
-source obligations. The package versions are recorded in /var/lib/dpkg/status;
-Debian source packages are available through https://sources.debian.org/.
-These Go/application notices do not replace operating-system obligations.
-
-COMPONENTS
-==========
-
-Go standard library go1.27.3
-  Copyright (c) 2016 The Go Authors. All rights reserved.
-  Copyright (c) 2017 The Go Authors. All rights reserved.
-  Copyright (c) 2019 The Go Authors. All rights reserved.
-  Copyright (c) 2021 The Go Authors. All rights reserved.
-  Copyright 2009 The Go Authors. All rights reserved.
-  Copyright 2009-2010 The Go Authors. All rights reserved.
-  Copyright 2010 The Go Authors. All rights reserved.
-  Copyright 2011 The Go Authors. All rights reserved.
-  Copyright 2012 The Go Authors. All rights reserved.
-  Copyright 2013 The Go Authors. All rights reserved.
-  Copyright 2014 Google Inc. All Rights Reserved.
-  Copyright 2014 The Go Authors. All rights reserved.
-  Copyright 2015 The Go Authors. All rights reserved.
-  Copyright 2016 The Go Authors. All rights reserved.
-  Copyright 2017 The Go Authors. All rights reserved.
-  Copyright 2018 The Go Authors. All rights reserved.
-  Copyright 2019 The Go Authors. All rights reserved.
-  Copyright 2020 The Go Authors. All rights reserved.
-  Copyright 2021 The Go Authors. All rights reserved.
-  Copyright 2022 The Go Authors. All rights reserved.
-  Copyright 2023 The Go Authors. All rights reserved.
-  Copyright 2024 The Go Authors. All rights reserved.
-  Copyright 2025 The Go Authors. All rights reserved.
-  Copyright 2026 The Go Authors. All rights reserved.
-  LICENSE: N001 + N002
-  PATENTS: N003
-  src/vendor/golang.org/x/crypto/LICENSE: N001 + N002
-  src/vendor/golang.org/x/crypto/PATENTS: N003
-  src/vendor/golang.org/x/net/LICENSE: N001 + N002
-  src/vendor/golang.org/x/net/PATENTS: N003
-  src/vendor/golang.org/x/sys/LICENSE: N001 + N002
-  src/vendor/golang.org/x/sys/PATENTS: N003
-  src/vendor/golang.org/x/text/LICENSE: N001 + N002
-  src/vendor/golang.org/x/text/PATENTS: N003
-  acosh.go (embedded notice): N004 + N005
-  atan.go (embedded notice): N006
-  cbrt.go (embedded notice): N007 + N005
-  exp.go (embedded notice): N008 + N005
-  p256_ordinv.go (embedded notice): N009 + N010
-  scalar.go (embedded notice): N011 + N010
-
-filippo.io/edwards25519 v1.2.0
-  Copyright (c) 2016 The Go Authors. All rights reserved.
-  Copyright (c) 2017 The Go Authors. All rights reserved.
-  Copyright (c) 2019 The Go Authors. All rights reserved.
-  Copyright (c) 2021 The Go Authors. All rights reserved.
-  LICENSE: N012 + N013
-  scalar.go (embedded notice): N011 + N010
-
-github.com/coder/websocket v1.8.15
-  LICENSE.txt: N014 + N015
-
-github.com/creachadair/msync v0.10.1
-  LICENSE: N016 + N017
-
-github.com/fxamacker/cbor/v2 v2.9.3
-  Copyright (c) Faye Amacker. All rights reserved.
-  LICENSE: N018 + N019
-
-github.com/gaissmai/bart v0.29.0
-  LICENSE: N020 + N019
-
-github.com/go-json-experiment/json v0.0.0-20260820222146-c27c302e5fc3
-  Copyright 2025 The Go Authors. All rights reserved.
-  Copyright 2026 The Go Authors. All rights reserved.
-  AUTHORS: N021
-  LICENSE: N022 + N013
-
-github.com/godbus/dbus/v5 v5.2.2
-  LICENSE: N023 + N024
-
-github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8
-  LICENSE: N025 + N026
-
-github.com/google/btree v1.1.3
-  Copyright 2014-2022 Google Inc.
-  LICENSE: N027 + N028
-
-github.com/hdevalence/ed25519consensus v0.2.0
-  Copyright 2016 Henry de Valence. All rights reserved.
-  Copyright 2016 The Go Authors. All rights reserved.
-  LICENSE: N029 + N013
-
-github.com/huin/goupnp v1.3.0
-  LICENSE: N030 + N031
-
-github.com/jsimonetti/rtnetlink v1.4.2
-  LICENSE.md: N032 + N019
-
-github.com/klauspost/compress v1.20.0
-  Based on work Copyright (c) 2013, Yann Collet, released under BSD License.
-  Copyright 2011 The Snappy-Go Authors. All rights reserved.
-  Copyright 2016 The Snappy-Go Authors. All rights reserved.
-  Copyright 2018 Klaus Post. All rights reserved.
-  Copyright 2019+ Klaus Post. All rights reserved.
-  Copyright 2020+ Klaus Post. All rights reserved.
-  Copyright 2025+ Klaus Post. All rights reserved.
-  LICENSE (base): N033 + N013
-  LICENSE (internal/snapref): N034 + N013
-  internal/snapref/LICENSE: N034 + N013
-  zstd/internal/xxhash/LICENSE.txt: N035 + N019
-
-github.com/mdlayher/netlink v1.11.2
-  Copyright 2009 The Go Authors. All rights reserved.
-  LICENSE.md: N036 + N019
-
-github.com/mdlayher/socket v0.7.0
-  LICENSE.md: N037 + N019
-
-github.com/mitchellh/go-ps v1.0.0
-  LICENSE.md: N038 + N019
-
-github.com/pires/go-proxyproto v0.15.0
-  LICENSE: N027 + N039
-
-github.com/safchain/ethtool v0.7.0
-  LICENSE: N027 + N040
-
-github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f
-  Copyright (c) 2021 Tailscale Inc & AUTHORS All rights reserved.
-  LICENSE: N041 + N013
-
-github.com/tailscale/peercred v0.0.0-20250107143737-35a0c7bd7edc
-  Copyright (c) 2021 AUTHORS All rights reserved.
-  AUTHORS: N042
-  LICENSE: N043 + N044
-
-github.com/tailscale/web-client-prebuilt v0.0.0-20260917222731-e0ed2d0d0fea
-  Copyright (c) 2018 Jed Watson.
-  Copyright (c) Facebook, Inc. and its affiliates.
-  Copyright (c) Tailscale Inc & AUTHORS
-  Copyright (c) Tailscale Inc & contributors
-  LICENSE: N045 + N044
-
-github.com/tailscale/wireguard-go v0.0.0-20260928213032-417aef361226
-  Copyright (C) 2017-2023 WireGuard LLC. All Rights Reserved.
-  LICENSE: N019
-
-github.com/x448/float16 v0.8.4
-  Copyright 2019 Montgomery Edwards⁴⁴⁸ and Faye Amacker
-  LICENSE: N046 + N019
-
-go4.org/mem v0.0.0-20240501181205-ae6ca9944745
-  LICENSE: N027 + N047
-
-go4.org/netipx v0.0.0-20260823151212-3075585bcbeb
-  Copyright 2020 The Inet.Af AUTHORS. All rights reserved.
-  Copyright 2021 The Inet.Af AUTHORS. All rights reserved.
-  AUTHORS: N048
-  LICENSE: N049 + N050
-
-golang.org/x/crypto v0.57.0
-  Copyright 2012 The Go Authors. All rights reserved.
-  Copyright 2014 The Go Authors. All rights reserved.
-  Copyright 2016 The Go Authors. All rights reserved.
-  Copyright 2017 The Go Authors. All rights reserved.
-  Copyright 2018 The Go Authors. All rights reserved.
-  Copyright 2019 The Go Authors. All rights reserved.
-  Copyright 2025 The Go Authors. All rights reserved.
-  LICENSE: N001 + N002
-  PATENTS: N003
-
-golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba
-  Copyright 2021 The Go Authors. All rights reserved.
-  LICENSE: N001 + N002
-  PATENTS: N003
-
-golang.org/x/net v0.59.0
-  Copyright 2009 The Go Authors. All rights reserved.
-  Copyright 2011 The Go Authors. All rights reserved.
-  Copyright 2012 The Go Authors. All rights reserved.
-  Copyright 2013 The Go Authors. All rights reserved.
-  Copyright 2014 The Go Authors. All rights reserved.
-  Copyright 2015 The Go Authors. All rights reserved.
-  Copyright 2016 The Go Authors. All rights reserved.
-  Copyright 2017 The Go Authors. All rights reserved.
-  Copyright 2018 The Go Authors. All rights reserved.
-  Copyright 2019 The Go Authors. All rights reserved.
-  Copyright 2020 The Go Authors. All rights reserved.
-  Copyright 2021 The Go Authors. All rights reserved.
-  Copyright 2025 The Go Authors. All rights reserved.
-  LICENSE: N001 + N002
-  PATENTS: N003
-
-golang.org/x/oauth2 v0.37.0
-  Copyright 2014 The Go Authors. All rights reserved.
-  Copyright 2017 The Go Authors. All rights reserved.
-  Copyright 2023 The Go Authors. All rights reserved.
-  LICENSE: N001 + N002
-
-golang.org/x/sync v0.23.0
-  Copyright 2016 The Go Authors. All rights reserved.
-  LICENSE: N001 + N002
-  PATENTS: N003
-
-golang.org/x/sys v0.48.0
-  Copyright 2009 The Go Authors. All rights reserved.
-  Copyright 2010 The Go Authors. All rights reserved.
-  Copyright 2011 The Go Authors. All rights reserved.
-  Copyright 2012 The Go Authors. All rights reserved.
-  Copyright 2014 The Go Authors. All rights reserved.
-  Copyright 2015 The Go Authors. All rights reserved.
-  Copyright 2016 The Go Authors. All rights reserved.
-  Copyright 2017 The Go Authors. All rights reserved.
-  Copyright 2018 The Go Authors. All rights reserved.
-  Copyright 2019 The Go Authors. All rights reserved.
-  Copyright 2021 The Go Authors. All rights reserved.
-  Copyright 2022 The Go Authors. All rights reserved.
-  Copyright 2023 The Go Authors. All rights reserved.
-  Copyright 2024 The Go Authors. All rights reserved.
-  Copyright 2025 The Go Authors. All rights reserved.
-  Copyright 2026 The Go Authors. All rights reserved.
-  LICENSE: N001 + N002
-  PATENTS: N003
-
-golang.org/x/term v0.46.0
-  Copyright 2011 The Go Authors. All rights reserved.
-  Copyright 2019 The Go Authors. All rights reserved.
-  Copyright 2021 The Go Authors. All rights reserved.
-  LICENSE: N001 + N002
-  PATENTS: N003
-
-golang.org/x/text v0.42.0
-  Copyright 2011 The Go Authors. All rights reserved.
-  Copyright 2013 The Go Authors. All rights reserved.
-  Copyright 2015 The Go Authors. All rights reserved.
-  Copyright 2016 The Go Authors. All rights reserved.
-  LICENSE: N001 + N002
-  PATENTS: N003
-
-golang.org/x/time v0.16.0
-  Copyright 2015 The Go Authors. All rights reserved.
-  Copyright 2022 The Go Authors. All rights reserved.
-  LICENSE: N001 + N002
-  PATENTS: N003
-
-gvisor.dev/gvisor v0.0.0-20260915211658-a6f909f08a72
-  Copyright 2009 The Go Authors. All rights reserved.
-  Copyright 2018 The gVisor Authors.
-  Copyright 2019 The gVisor Authors.
-  Copyright 2020 The gVisor Authors.
-  Copyright 2021 The gVisor Authors.
-  Copyright 2022 The gVisor Authors.
-  Copyright 2023 The gVisor Authors.
-  Copyright 2024 The gVisor Authors.
-  Copyright 2025 The gVisor Authors.
-  Copyright 2026 The gVisor Authors.
-  AUTHORS: N051
-  LICENSE: N027 + N052
-
-tailscale.com v1.104.1
-  Copyright 2009 The Go Authors. All rights reserved.
-  Copyright 2011 The Go Authors. All rights reserved.
-  Copyright 2013 The Go Authors. All rights reserved.
-  Copyright 2015 The Go Authors. All rights reserved.
-  Copyright 2016 The Go Authors. All rights reserved.
-  Copyright 2018 The Go Authors. All rights reserved.
-  Copyright 2019 The Go Authors. All rights reserved.
-  LICENSE: N053 + N044
-  PATENTS: N054
-  license_test.go: N055
-
-Web client source: @babel/runtime 7.28.2
-Source: https://registry.yarnpkg.com/@babel/runtime/-/runtime-7.28.2.tgz
-  package/LICENSE: N056 + N019
-
-Web client source: @floating-ui/core 1.5.0
-Source: https://registry.yarnpkg.com/@floating-ui/core/-/core-1.5.0.tgz
-  package/LICENSE: N057 + N019
-
-Web client source: @floating-ui/dom 1.5.3
-Source: https://registry.yarnpkg.com/@floating-ui/dom/-/dom-1.5.3.tgz
-  package/LICENSE: N057 + N019
-
-Web client source: @floating-ui/react-dom 2.0.4
-Source: https://registry.yarnpkg.com/@floating-ui/react-dom/-/react-dom-2.0.4.tgz
-  package/LICENSE: N057 + N019
-
-Web client source: @floating-ui/utils 0.1.6
-Source: https://registry.yarnpkg.com/@floating-ui/utils/-/utils-0.1.6.tgz
-  package/LICENSE: N057 + N019
-
-Web client source: @radix-ui/primitive 1.0.1
-Source: https://registry.yarnpkg.com/@radix-ui/primitive/-/primitive-1.0.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-arrow 1.0.3
-Source: https://registry.yarnpkg.com/@radix-ui/react-arrow/-/react-arrow-1.0.3.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-collapsible 1.0.3
-Source: https://registry.yarnpkg.com/@radix-ui/react-collapsible/-/react-collapsible-1.0.3.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-compose-refs 1.0.1
-Source: https://registry.yarnpkg.com/@radix-ui/react-compose-refs/-/react-compose-refs-1.0.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-context 1.0.1
-Source: https://registry.yarnpkg.com/@radix-ui/react-context/-/react-context-1.0.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-dialog 1.0.5
-Source: https://registry.yarnpkg.com/@radix-ui/react-dialog/-/react-dialog-1.0.5.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-dismissable-layer 1.0.5
-Source: https://registry.yarnpkg.com/@radix-ui/react-dismissable-layer/-/react-dismissable-layer-1.0.5.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-focus-guards 1.0.1
-Source: https://registry.yarnpkg.com/@radix-ui/react-focus-guards/-/react-focus-guards-1.0.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-focus-scope 1.0.4
-Source: https://registry.yarnpkg.com/@radix-ui/react-focus-scope/-/react-focus-scope-1.0.4.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-id 1.0.1
-Source: https://registry.yarnpkg.com/@radix-ui/react-id/-/react-id-1.0.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-popover 1.0.7
-Source: https://registry.yarnpkg.com/@radix-ui/react-popover/-/react-popover-1.0.7.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-popper 1.1.3
-Source: https://registry.yarnpkg.com/@radix-ui/react-popper/-/react-popper-1.1.3.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-portal 1.0.4
-Source: https://registry.yarnpkg.com/@radix-ui/react-portal/-/react-portal-1.0.4.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-presence 1.0.1
-Source: https://registry.yarnpkg.com/@radix-ui/react-presence/-/react-presence-1.0.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-primitive 1.0.3
-Source: https://registry.yarnpkg.com/@radix-ui/react-primitive/-/react-primitive-1.0.3.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-slot 1.0.2
-Source: https://registry.yarnpkg.com/@radix-ui/react-slot/-/react-slot-1.0.2.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-use-callback-ref 1.0.1
-Source: https://registry.yarnpkg.com/@radix-ui/react-use-callback-ref/-/react-use-callback-ref-1.0.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-use-controllable-state 1.0.1
-Source: https://registry.yarnpkg.com/@radix-ui/react-use-controllable-state/-/react-use-controllable-state-1.0.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-use-escape-keydown 1.0.3
-Source: https://registry.yarnpkg.com/@radix-ui/react-use-escape-keydown/-/react-use-escape-keydown-1.0.3.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-use-layout-effect 1.0.1
-Source: https://registry.yarnpkg.com/@radix-ui/react-use-layout-effect/-/react-use-layout-effect-1.0.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-use-rect 1.0.1
-Source: https://registry.yarnpkg.com/@radix-ui/react-use-rect/-/react-use-rect-1.0.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/react-use-size 1.0.1
-Source: https://registry.yarnpkg.com/@radix-ui/react-use-size/-/react-use-size-1.0.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: @radix-ui/rect 1.0.1
-Source: https://registry.yarnpkg.com/@radix-ui/rect/-/rect-1.0.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: aria-hidden 1.2.3
-Source: https://registry.yarnpkg.com/aria-hidden/-/aria-hidden-1.2.3.tgz
-  package/LICENSE: N058 + N019
-
-Web client source: classnames 2.3.2
-Source: https://registry.yarnpkg.com/classnames/-/classnames-2.3.2.tgz
-  package/LICENSE: N059 + N019
-
-Web client source: detect-node-es 1.1.0
-Source: https://registry.yarnpkg.com/detect-node-es/-/detect-node-es-1.1.0.tgz
-  package/LICENSE: N060 + N019
-
-Web client source: get-nonce 1.0.1
-Source: https://registry.yarnpkg.com/get-nonce/-/get-nonce-1.0.1.tgz
-  package/LICENSE: N061 + N019
-
-Web client source: invariant 2.2.4
-Source: https://registry.yarnpkg.com/invariant/-/invariant-2.2.4.tgz
-  package/LICENSE: N062 + N019
-
-Web client source: js-tokens 4.0.0
-Source: https://registry.yarnpkg.com/js-tokens/-/js-tokens-4.0.0.tgz
-  package/LICENSE: N063 + N019
-
-Web client source: loose-envify 1.4.0
-Source: https://registry.yarnpkg.com/loose-envify/-/loose-envify-1.4.0.tgz
-  package/LICENSE: N064 + N019
-
-Web client source: react-dom 18.2.0
-Source: https://registry.yarnpkg.com/react-dom/-/react-dom-18.2.0.tgz
-  package/LICENSE: N065 + N019
-
-Web client source: react-remove-scroll-bar 2.3.4
-Source: https://registry.yarnpkg.com/react-remove-scroll-bar/-/react-remove-scroll-bar-2.3.4.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: react-remove-scroll 2.5.5
-Source: https://registry.yarnpkg.com/react-remove-scroll/-/react-remove-scroll-2.5.5.tgz
-  package/LICENSE: N058 + N019
-
-Web client source: react-style-singleton 2.2.1
-Source: https://registry.yarnpkg.com/react-style-singleton/-/react-style-singleton-2.2.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: react 18.2.0
-Source: https://registry.yarnpkg.com/react/-/react-18.2.0.tgz
-  package/LICENSE: N065 + N019
-
-Web client source: scheduler 0.23.0
-Source: https://registry.yarnpkg.com/scheduler/-/scheduler-0.23.0.tgz
-  package/LICENSE: N065 + N019
-
-Web client source: swr 2.2.4
-Source: https://registry.yarnpkg.com/swr/-/swr-2.2.4.tgz
-  package/LICENSE: N066 + N019
-
-Web client source: tailwindcss 3.3.3
-Source: https://registry.yarnpkg.com/tailwindcss/-/tailwindcss-3.3.3.tgz
-  package/lib/css/LICENSE: N067 + N019
-  package/lib/value-parser/LICENSE: N068 + N019
-  package/LICENSE: N069 + N019
-  package/src/css/LICENSE: N067 + N019
-  package/src/value-parser/LICENSE: N068 + N019
-
-Web client source: tslib 2.6.2
-Source: https://registry.yarnpkg.com/tslib/-/tslib-2.6.2.tgz
-  package/LICENSE.txt: N070 + N071
-
-Web client source: use-callback-ref 1.3.0
-Source: https://registry.yarnpkg.com/use-callback-ref/-/use-callback-ref-1.3.0.tgz
-  package/LICENSE: N058 + N019
-
-Web client source: use-sidecar 1.1.2
-Source: https://registry.yarnpkg.com/use-sidecar/-/use-sidecar-1.1.2.tgz
-  package/LICENSE: N058 + N019
-
-Web client source: use-sync-external-store 1.2.0
-Source: https://registry.yarnpkg.com/use-sync-external-store/-/use-sync-external-store-1.2.0.tgz
-  package/LICENSE: N065 + N019
-
-Web client source: wouter 2.12.1
-Source: https://registry.yarnpkg.com/wouter/-/wouter-2.12.1.tgz
-  License text/copyright verification pending (see unresolved items).
-
-Web client source: zustand 4.4.7
-Source: https://registry.yarnpkg.com/zustand/-/zustand-4.4.7.tgz
-  package/LICENSE: N072 + N019
-
-Inter font 3.019;git-0a5106e0b
-Source: https://raw.githubusercontent.com/rsms/inter/0a5106e0b/LICENSE.txt
-  Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter)
-  LICENSE.txt: N073 + N074
-
-UNRESOLVED ATTRIBUTION
-======================
-The embedded web-client JavaScript/CSS and Inter font are retained in the
-binary. The prebuilt module's commit/PR does not identify the originating web
-source revision. Verified source-package texts above are a conservative subset,
-not a complete bundle attribution claim. Obtain the exact source/bundle inventory
-and verify the remaining package notices before public binary/image release:
-  @radix-ui/primitive@1.0.1
-  @radix-ui/react-arrow@1.0.3
-  @radix-ui/react-collapsible@1.0.3
-  @radix-ui/react-compose-refs@1.0.1
-  @radix-ui/react-context@1.0.1
-  @radix-ui/react-dialog@1.0.5
-  @radix-ui/react-dismissable-layer@1.0.5
-  @radix-ui/react-focus-guards@1.0.1
-  @radix-ui/react-focus-scope@1.0.4
-  @radix-ui/react-id@1.0.1
-  @radix-ui/react-popover@1.0.7
-  @radix-ui/react-popper@1.1.3
-  @radix-ui/react-portal@1.0.4
-  @radix-ui/react-presence@1.0.1
-  @radix-ui/react-primitive@1.0.3
-  @radix-ui/react-slot@1.0.2
-  @radix-ui/react-use-callback-ref@1.0.1
-  @radix-ui/react-use-controllable-state@1.0.1
-  @radix-ui/react-use-escape-keydown@1.0.3
-  @radix-ui/react-use-layout-effect@1.0.1
-  @radix-ui/react-use-rect@1.0.1
-  @radix-ui/react-use-size@1.0.1
-  @radix-ui/rect@1.0.1
-  react-remove-scroll-bar@2.3.4
-  react-style-singleton@2.2.1
-  wouter@2.12.1
-The empty default entry of client-only@0.0.1 emits no browser code; its server
-error text is absent from the bundle. Eventbus htmx assets are also absent from
-the linked binary. Those do not require bundled-code notices here.
-
-LICENSE AND ATTRIBUTION TEXTS
-============================
-
-Text N001
----------
+The following copyright notices and license terms apply to bundled software.
+
+BSD terms (Google LLC)
+----------------------
+Copyright 2014 Google Inc. All Rights Reserved.
 Copyright 2009 The Go Authors.
 
-Text N002
----------
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
 met:
@@ -560,109 +33,26 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Text N003
----------
-Additional IP Rights Grant (Patents)
-
-"This implementation" means the copyrightable works distributed by
-Google as part of the Go project.
-
-Google hereby grants to You a perpetual, worldwide, non-exclusive,
-no-charge, royalty-free, irrevocable (except as stated in this section)
-patent license to make, have made, use, offer to sell, sell, import,
-transfer and otherwise run, modify and propagate the contents of this
-implementation of Go, where such license applies only to those patent
-claims, both currently owned or controlled by Google and acquired in
-the future, licensable by Google that are necessarily infringed by this
-implementation of Go.  This grant does not include claims that would be
-infringed only as a consequence of further modification of this
-implementation.  If you or your agent or exclusive licensee institute or
-order or agree to the institution of patent litigation against any
-entity (including a cross-claim or counterclaim in a lawsuit) alleging
-that this implementation of Go or any code incorporated within this
-implementation of Go constitutes direct or contributory patent
-infringement, or inducement of patent infringement, then any patent
-rights granted to you under this License for this implementation of Go
-shall terminate as of the date such litigation is filed.
-
-Text N004
----------
-Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
-
-Developed at SunPro, a Sun Microsystems, Inc. business.
-
-Text N005
----------
-Permission to use, copy, modify, and distribute this
-software is freely granted, provided that this notice
-is preserved.
-
-Text N006
----------
-Cephes Math Library Release 2.8:  June, 2000
-Copyright 1984, 1987, 1989, 1992, 2000 by Stephen L. Moshier
-
-The readme file at http://netlib.sandia.gov/cephes/ says:
-   Some software in this archive may be from the book _Methods and
-Programs for Mathematical Functions_ (Prentice-Hall or Simon & Schuster
-International, 1989) or from the Cephes Mathematical Library, a
-commercial product. In either event, it is copyrighted by the author.
-What you see here may be used freely but it comes with no support or
-guarantee.
-
-  The two known misprints in the book are repaired here in the
-source listings for the gamma function and the incomplete beta
-integral.
-
-  Stephen L. Moshier
-  moshier@na-net.ornl.gov
-
-Text N007
----------
-Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
-
-Developed at SunSoft, a Sun Microsystems, Inc. business.
-
-Text N008
----------
-Copyright (C) 2004 by Sun Microsystems, Inc. All rights reserved.
-
-Text N009
----------
-Copyright (c) 2015-2020 the fiat-crypto authors (see the AUTHORS file)
-     All rights reserved.
-
-Text N010
----------
-Redistribution and use in source and binary forms, with or without
-     modification, are permitted provided that the following conditions are
-     met:
-
-        1. Redistributions of source code must retain the above copyright
-        notice, this list of conditions and the following disclaimer.
-
-     THIS SOFTWARE IS PROVIDED BY the fiat-crypto authors "AS IS"
-     AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
-     THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-     PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL Berkeley Software Design,
-     Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-     EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-     PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-     PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-     LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-     NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-     SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-Text N011
----------
-Copyright (c) 2015-2020 The fiat-crypto Authors. All rights reserved.
-
-Text N012
----------
+BSD terms (Google Inc.)
+-----------------------
 Copyright (c) 2009 The Go Authors. All rights reserved.
+Copyright (c) 2020 The Go Authors. All rights reserved.
+Copyright 2016 Henry de Valence. All rights reserved.
+Copyright (c) 2020 Henry de Valence. All rights reserved.
+Based on work Copyright (c) 2013, Yann Collet, released under BSD License.
+Copyright 2011 The Snappy-Go Authors. All rights reserved.
+Copyright 2016 The Snappy-Go Authors. All rights reserved.
+Copyright 2018 Klaus Post. All rights reserved.
+Copyright 2019+ Klaus Post. All rights reserved.
+Copyright 2020+ Klaus Post. All rights reserved.
+Copyright 2025+ Klaus Post. All rights reserved.
+Copyright (c) 2012 The Go Authors. All rights reserved.
+Copyright (c) 2019 Klaus Post. All rights reserved.
+Copyright (c) 2011 The Snappy-Go Authors. All rights reserved.
+Copyright (c) 2021 Tailscale Inc & AUTHORS All rights reserved.
+Copyright (c) 2019 Tailscale Inc. All rights reserved.
+Copyright 2009 The Go Authors. All rights reserved.
 
-Text N013
----------
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
 met:
@@ -689,12 +79,63 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Text N014
+MIT terms
 ---------
+Copyright (c) Faye Amacker. All rights reserved.
+Copyright (c) 2019-present Faye Amacker
+Copyright (c) 2026 Karl Gaissmaier
+Copyright (C) 2016 Jeroen Simonetti
+Copyright (c) 2016 Caleb Spare
+Copyright (C) 2016-2026 Matt Layher
+Copyright (C) 2021 Matt Layher
+Copyright (c) 2014 Mitchell Hashimoto
+Copyright (c) 2018 Jed Watson.
+Copyright (c) Facebook, Inc. and its affiliates.
+Copyright (C) 2017-2023 WireGuard LLC. All Rights Reserved.
+Copyright 2019 Montgomery Edwards⁴⁴⁸ and Faye Amacker
+Copyright (c) 2019 Montgomery Edwards⁴⁴⁸ and Faye Amacker
+Copyright (c) 2014-present Sebastian McKenzie and other contributors
+Copyright (c) 2021-present Floating UI contributors
+Copyright (c) 2017 Anton Korzunov
+Copyright (c) 2018 Jed Watson
+Copyright (c) 2017 Ilya Kantor
+Copyright (c) 2020 Anton Korzunov
+Copyright (c) 2013-present, Facebook, Inc.
+Copyright (c) 2014, 2015, 2016, 2017, 2018 Simon Lydell
+Copyright (c) 2015 Andres Suarez <zertosh@gmail.com>
+Copyright (c) 2023 Vercel, Inc.
+Copyright (c) Nicolas Gallagher
+Copyright (c) Jonathan Neal
+Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
+Copyright (c) Adam Wathan
+Copyright (c) Jonathan Reinink
+Copyright (c) Bogdan Chadkin <trysound@yandex.ru>
+Copyright (c) Tailwind Labs, Inc.
+Copyright (c) 2019 Paul Henschel
+Copyright 2018 The gVisor Authors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+ISC terms (Coder)
+-----------------
 Copyright (c) 2025 Coder
 
-Text N015
----------
 Permission to use, copy, modify, and distribute this software for any
 purpose with or without fee is hereby granted, provided that the above
 copyright notice and this permission notice appear in all copies.
@@ -707,13 +148,11 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-Text N016
----------
+BSD terms (Michael J. Fromberger)
+---------------------------------
 Copyright (C) 2022, Michael J. Fromberger
 All Rights Reserved.
 
-Text N017
----------
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
@@ -738,55 +177,11 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
 IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
 OF SUCH DAMAGE.
 
-Text N018
----------
-MIT License
-
-Copyright (c) 2019-present Faye Amacker
-
-Text N019
----------
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-Text N020
----------
-MIT License
-
-Copyright (c) 2026 Karl Gaissmaier
-
-Text N021
----------
-# This source code refers to The Go Authors for copyright purposes.
-# The master list of authors is in the main Go distribution,
-# visible at https://tip.golang.org/AUTHORS.
-
-Text N022
----------
-Copyright (c) 2020 The Go Authors. All rights reserved.
-
-Text N023
----------
+BSD terms (D-Bus)
+-----------------
 Copyright (c) 2013, Georg Reinke (<guelfey at gmail dot com>), Google
 All rights reserved.
 
-Text N024
----------
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
 are met:
@@ -810,204 +205,154 @@ LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Text N025
----------
-Apache License
-Version 2.0, January 2004
-http://www.apache.org/licenses/
+BSD terms (goupnp)
+------------------
+Copyright (c) 2013, John Beisley <johnbeisleyuk@gmail.com>
+All rights reserved.
 
-TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
 
-1. Definitions.
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
 
-"License" shall mean the terms and conditions for use, reproduction, and
-distribution as defined by Sections 1 through 9 of this document.
+* Redistributions in binary form must reproduce the above copyright notice, this
+  list of conditions and the following disclaimer in the documentation and/or
+  other materials provided with the distribution.
 
-"Licensor" shall mean the copyright owner or entity authorized by the copyright
-owner that is granting the License.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"Legal Entity" shall mean the union of the acting entity and all other entities
-that control, are controlled by, or are under common control with that entity.
-For the purposes of this definition, "control" means (i) the power, direct or
-indirect, to cause the direction or management of such entity, whether by
-contract or otherwise, or (ii) ownership of fifty percent (50%) or more of the
-outstanding shares, or (iii) beneficial ownership of such entity.
+BSD terms (Tailscale)
+---------------------
+Copyright (c) 2021 AUTHORS All rights reserved.
+Copyright (c) 2021, Tailscale Inc.
+All rights reserved.
+Copyright (c) Tailscale Inc & AUTHORS
+Copyright (c) Tailscale Inc & contributors
+Copyright (c) 2020 Tailscale Inc & AUTHORS.
+Copyright (c) 2020 Tailscale Inc & contributors.
 
-"You" (or "Your") shall mean an individual or Legal Entity exercising
-permissions granted by this License.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
 
-"Source" form shall mean the preferred form for making modifications, including
-but not limited to software source code, documentation source, and configuration
-files.
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
 
-"Object" form shall mean any form resulting from mechanical transformation or
-translation of a Source form, including but not limited to compiled object code,
-generated documentation, and conversions to other media types.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
 
-"Work" shall mean the work of authorship, whether in Source or Object form, made
-available under the License, as indicated by a copyright notice that is included
-in or attached to the work (an example is provided in the Appendix below).
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
 
-"Derivative Works" shall mean any work, whether in Source or Object form, that
-is based on (or derived from) the Work and for which the editorial revisions,
-annotations, elaborations, or other modifications represent, as a whole, an
-original work of authorship. For the purposes of this License, Derivative Works
-shall not include works that remain separable from, or merely link (or bind by
-name) to the interfaces of, the Work and Derivative Works thereof.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"Contribution" shall mean any work of authorship, including the original version
-of the Work and any modifications or additions to that Work or Derivative Works
-thereof, that is intentionally submitted to Licensor for inclusion in the Work
-by the copyright owner or by an individual or Legal Entity authorized to submit
-on behalf of the copyright owner. For the purposes of this definition,
-"submitted" means any form of electronic, verbal, or written communication sent
-to the Licensor or its representatives, including but not limited to
-communication on electronic mailing lists, source code control systems, and
-issue tracking systems that are managed by, or on behalf of, the Licensor for
-the purpose of discussing and improving the Work, but excluding communication
-that is conspicuously marked or otherwise designated in writing by the copyright
-owner as "Not a Contribution."
+BSD terms (Inet.af)
+-------------------
+Copyright 2020 The Inet.Af AUTHORS. All rights reserved.
+Copyright 2021 The Inet.Af AUTHORS. All rights reserved.
+Copyright (c) 2020 The Inet.af AUTHORS. All rights reserved.
 
-"Contributor" shall mean Licensor and any individual or Legal Entity on behalf
-of whom a Contribution has been received by Licensor and subsequently
-incorporated within the Work.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
 
-2. Grant of Copyright License.
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Tailscale Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
 
-Subject to the terms and conditions of this License, each Contributor hereby
-grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free,
-irrevocable copyright license to reproduce, prepare Derivative Works of,
-publicly display, publicly perform, sublicense, and distribute the Work and such
-Derivative Works in Source or Object form.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-3. Grant of Patent License.
+BSD terms (fiat-crypto)
+-----------------------
+Copyright (c) 2015-2020 the fiat-crypto authors (see the AUTHORS file)
+All rights reserved.
+Copyright (c) 2015-2020 The fiat-crypto Authors. All rights reserved.
 
-Subject to the terms and conditions of this License, each Contributor hereby
-grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free,
-irrevocable (except as stated in this section) patent license to make, have
-made, use, offer to sell, sell, import, and otherwise transfer the Work, where
-such license applies only to those patent claims licensable by such Contributor
-that are necessarily infringed by their Contribution(s) alone or by combination
-of their Contribution(s) with the Work to which such Contribution(s) was
-submitted. If You institute patent litigation against any entity (including a
-cross-claim or counterclaim in a lawsuit) alleging that the Work or a
-Contribution incorporated within the Work constitutes direct or contributory
-patent infringement, then any patent licenses granted to You under this License
-for that Work shall terminate as of the date such litigation is filed.
+Redistribution and use in source and binary forms, with or without
+     modification, are permitted provided that the following conditions are
+     met:
 
-4. Redistribution.
+        1. Redistributions of source code must retain the above copyright
+        notice, this list of conditions and the following disclaimer.
 
-You may reproduce and distribute copies of the Work or Derivative Works thereof
-in any medium, with or without modifications, and in Source or Object form,
-provided that You meet the following conditions:
+     THIS SOFTWARE IS PROVIDED BY the fiat-crypto authors "AS IS"
+     AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+     THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+     PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL Berkeley Software Design,
+     Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+     EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+     PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+     PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+     LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+     NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+     SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-You must give any other recipients of the Work or Derivative Works a copy of
-this License; and
-You must cause any modified files to carry prominent notices stating that You
-changed the files; and
-You must retain, in the Source form of any Derivative Works that You distribute,
-all copyright, patent, trademark, and attribution notices from the Source form
-of the Work, excluding those notices that do not pertain to any part of the
-Derivative Works; and
-If the Work includes a "NOTICE" text file as part of its distribution, then any
-Derivative Works that You distribute must include a readable copy of the
-attribution notices contained within such NOTICE file, excluding those notices
-that do not pertain to any part of the Derivative Works, in at least one of the
-following places: within a NOTICE text file distributed as part of the
-Derivative Works; within the Source form or documentation, if provided along
-with the Derivative Works; or, within a display generated by the Derivative
-Works, if and wherever such third-party notices normally appear. The contents of
-the NOTICE file are for informational purposes only and do not modify the
-License. You may add Your own attribution notices within Derivative Works that
-You distribute, alongside or as an addendum to the NOTICE text from the Work,
-provided that such additional attribution notices cannot be construed as
-modifying the License.
-You may add Your own copyright statement to Your modifications and may provide
-additional or different license terms and conditions for use, reproduction, or
-distribution of Your modifications, or for any such Derivative Works as a whole,
-provided Your use, reproduction, and distribution of the Work otherwise complies
-with the conditions stated in this License.
+Microsoft permission notice
+---------------------------
+Copyright (c) Microsoft Corporation.
 
-5. Submission of Contributions.
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
 
-Unless You explicitly state otherwise, any Contribution intentionally submitted
-for inclusion in the Work by You to the Licensor shall be under the terms and
-conditions of this License, without any additional terms or conditions.
-Notwithstanding the above, nothing herein shall supersede or modify the terms of
-any separate license agreement you may have executed with Licensor regarding
-such Contributions.
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
 
-6. Trademarks.
+Apache-2.0 terms
+----------------
+Copyright 2014-2022 Google Inc.
+Copyright 2016 Paulo Pires
+Copyright (c) 2015 The Ethtool Authors
+Copyright 2018 The gVisor Authors.
+Copyright 2019 The gVisor Authors.
+Copyright 2020 The gVisor Authors.
+Copyright 2021 The gVisor Authors.
+Copyright 2022 The gVisor Authors.
+Copyright 2023 The gVisor Authors.
+Copyright 2024 The gVisor Authors.
+Copyright 2025 The gVisor Authors.
+Copyright 2026 The gVisor Authors.
 
-This License does not grant permission to use the trade names, trademarks,
-service marks, or product names of the Licensor, except as required for
-reasonable and customary use in describing the origin of the Work and
-reproducing the content of the NOTICE file.
-
-7. Disclaimer of Warranty.
-
-Unless required by applicable law or agreed to in writing, Licensor provides the
-Work (and each Contributor provides its Contributions) on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied,
-including, without limitation, any warranties or conditions of TITLE,
-NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE. You are
-solely responsible for determining the appropriateness of using or
-redistributing the Work and assume any risks associated with Your exercise of
-permissions under this License.
-
-8. Limitation of Liability.
-
-In no event and under no legal theory, whether in tort (including negligence),
-contract, or otherwise, unless required by applicable law (such as deliberate
-and grossly negligent acts) or agreed to in writing, shall any Contributor be
-liable to You for damages, including any direct, indirect, special, incidental,
-or consequential damages of any character arising as a result of this License or
-out of the use or inability to use the Work (including but not limited to
-damages for loss of goodwill, work stoppage, computer failure or malfunction, or
-any and all other commercial damages or losses), even if such Contributor has
-been advised of the possibility of such damages.
-
-9. Accepting Warranty or Additional Liability.
-
-While redistributing the Work or Derivative Works thereof, You may choose to
-offer, and charge a fee for, acceptance of support, warranty, indemnity, or
-other liability obligations and/or rights consistent with this License. However,
-in accepting such obligations, You may act only on Your own behalf and on Your
-sole responsibility, not on behalf of any other Contributor, and only if You
-agree to indemnify, defend, and hold each Contributor harmless for any liability
-incurred by, or claims asserted against, such Contributor by reason of your
-accepting any such warranty or additional liability.
-
-END OF TERMS AND CONDITIONS
-
-Text N026
----------
-APPENDIX: How to apply the Apache License to your work
-
-To apply the Apache License to your work, attach the following boilerplate
-notice, with the fields enclosed by brackets "[]" replaced with your own
-identifying information. (Don't include the brackets!) The text should be
-enclosed in the appropriate comment syntax for the file format. We also
-recommend that a file or class name and description of purpose be included on
-the same "printed page" as the copyright notice for easier identification within
-third-party archives.
-
-   Copyright [yyyy] [name of copyright owner]
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-
-Text N027
----------
 Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -1185,8 +530,6 @@ Apache License
 
    END OF TERMS AND CONDITIONS
 
-Text N028
----------
 APPENDIX: How to apply the Apache License to your work.
 
       To apply the Apache License to your work, attach the following
@@ -1212,632 +555,44 @@ APPENDIX: How to apply the Apache License to your work.
    See the License for the specific language governing permissions and
    limitations under the License.
 
-Text N029
----------
-Copyright (c) 2009 The Go Authors. All rights reserved.
-Copyright (c) 2020 Henry de Valence. All rights reserved.
+Sun Microsystems permission notices
+-----------------------------------
+Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
 
-Text N030
----------
-Copyright (c) 2013, John Beisley <johnbeisleyuk@gmail.com>
-All rights reserved.
+Developed at SunPro, a Sun Microsystems, Inc. business.
 
-Text N031
----------
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
+Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
 
-* Redistributions of source code must retain the above copyright notice, this
-  list of conditions and the following disclaimer.
+Developed at SunSoft, a Sun Microsystems, Inc. business.
 
-* Redistributions in binary form must reproduce the above copyright notice, this
-  list of conditions and the following disclaimer in the documentation and/or
-  other materials provided with the distribution.
+Copyright (C) 2004 by Sun Microsystems, Inc. All rights reserved.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+Permission to use, copy, modify, and distribute this
+software is freely granted, provided that this notice
+is preserved.
 
-Text N032
----------
-MIT License
-===========
+Cephes notice
+-------------
+Cephes Math Library Release 2.8:  June, 2000
+Copyright 1984, 1987, 1989, 1992, 2000 by Stephen L. Moshier
 
-Copyright (C) 2016 Jeroen Simonetti
+The readme file at http://netlib.sandia.gov/cephes/ says:
+   Some software in this archive may be from the book _Methods and
+Programs for Mathematical Functions_ (Prentice-Hall or Simon & Schuster
+International, 1989) or from the Cephes Mathematical Library, a
+commercial product. In either event, it is copyrighted by the author.
+What you see here may be used freely but it comes with no support or
+guarantee.
 
-Text N033
----------
-Copyright (c) 2012 The Go Authors. All rights reserved.
-Copyright (c) 2019 Klaus Post. All rights reserved.
+  The two known misprints in the book are repaired here in the
+source listings for the gamma function and the incomplete beta
+integral.
 
-Text N034
----------
-Copyright (c) 2011 The Snappy-Go Authors. All rights reserved.
+  Stephen L. Moshier
+  moshier@na-net.ornl.gov
 
-Text N035
----------
-Copyright (c) 2016 Caleb Spare
-
-MIT License
-
-Text N036
----------
-# MIT License
-
-Copyright (C) 2016-2026 Matt Layher
-
-Text N037
----------
-# MIT License
-
-Copyright (C) 2021 Matt Layher
-
-Text N038
----------
-The MIT License (MIT)
-
-Copyright (c) 2014 Mitchell Hashimoto
-
-Text N039
----------
-APPENDIX: How to apply the Apache License to your work.
-
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "{}"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
-
-   Copyright 2016 Paulo Pires
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-
-Text N040
----------
-APPENDIX: How to apply the Apache License to your work.
-
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "{}"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
-
-   Copyright (c) 2015 The Ethtool Authors
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-
-Text N041
----------
-Copyright (c) 2019 Tailscale Inc. All rights reserved.
-
-Text N042
----------
-Tailscale Inc
-
-Text N043
----------
-BSD 3-Clause License
-
-Copyright (c) 2021, Tailscale Inc.
-All rights reserved.
-
-Text N044
----------
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-
-3. Neither the name of the copyright holder nor the names of its
-   contributors may be used to endorse or promote products derived from
-   this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-Text N045
----------
-BSD 3-Clause License
-
-Copyright (c) 2020 Tailscale Inc & AUTHORS.
-
-Text N046
----------
-MIT License
-
-Copyright (c) 2019 Montgomery Edwards⁴⁴⁸ and Faye Amacker
-
-Text N047
----------
-APPENDIX: How to apply the Apache License to your work.
-
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "{}"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
-
-   Copyright {yyyy} {name of copyright owner}
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-
-Text N048
----------
-Alex Willmer <alex@moreati.org.uk>
-Matt Layher <mdlayher@gmail.com>
-Tailscale Inc.
-Tobias Klauser <tklauser@distanz.ch>
-
-Text N049
----------
-Copyright (c) 2020 The Inet.af AUTHORS. All rights reserved.
-
-Text N050
----------
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-   * Redistributions of source code must retain the above copyright
-notice, this list of conditions and the following disclaimer.
-   * Redistributions in binary form must reproduce the above
-copyright notice, this list of conditions and the following disclaimer
-in the documentation and/or other materials provided with the
-distribution.
-   * Neither the name of Tailscale Inc. nor the names of its
-contributors may be used to endorse or promote products derived from
-this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-Text N051
----------
-# This is the list of gVisor authors for copyright purposes.
-#
-# This does not necessarily list everyone who has contributed code, since in
-# some cases, their employer may be the copyright holder.  To see the full list
-# of contributors, see the revision history in source control.
-#
-# Please send a patch if you would like to be included in this list.
-Google LLC
-
-Text N052
----------
-APPENDIX: How to apply the Apache License to your work.
-
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
-
-   Copyright [yyyy] [name of copyright owner]
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-
-------------------
-
-Some files carry the following license, noted at the top of each file:
-
-   Permission is hereby granted, free of charge, to any person obtaining a copy
-   of this software and associated documentation files (the "Software"), to deal
-   in the Software without restriction, including without limitation the rights
-   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-   copies of the Software, and to permit persons to whom the Software is
-   furnished to do so, subject to the following conditions:
-
-   The above copyright notice and this permission notice shall be included in
-   all copies or substantial portions of the Software.
-
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-   THE SOFTWARE.
-
-------------------
-
-Some files carry the "BSD" license, noted at the top of each file:
-
-   Redistribution and use in source and binary forms, with or without
-   modification, are permitted provided that the following conditions are met:
-
-      * Redistributions of source code must retain the above copyright notice,
-      this list of conditions and the following disclaimer.
-
-      * Redistributions in binary form must reproduce the above copyright
-      notice, this list of conditions and the following disclaimer in the
-      documentation and/or other materials provided with the distribution.
-
-      * Neither the name of Google Inc. nor the names of its contributors may be
-      used to endorse or promote products derived from this software without
-      specific prior written permission.
-
-   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
-   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-   POSSIBILITY OF SUCH DAMAGE.
-
-Text N053
----------
-BSD 3-Clause License
-
-Copyright (c) 2020 Tailscale Inc & contributors.
-
-Text N054
----------
-Additional IP Rights Grant (Patents)
-
-"This implementation" means the copyrightable works distributed by
-Tailscale Inc. as part of the Tailscale project.
-
-Tailscale Inc. hereby grants to You a perpetual, worldwide,
-non-exclusive, no-charge, royalty-free, irrevocable (except as stated
-in this section) patent license to make, have made, use, offer to
-sell, sell, import, transfer and otherwise run, modify and propagate
-the contents of this implementation of Tailscale, where such license
-applies only to those patent claims, both currently owned or
-controlled by Tailscale Inc. and acquired in the future, licensable
-by Tailscale Inc. that are necessarily infringed by this
-implementation of Tailscale.  This grant does not include claims that
-would be infringed only as a consequence of further modification of
-this implementation.  If you or your agent or exclusive licensee
-institute or order or agree to the institution of patent litigation
-against any entity (including a cross-claim or counterclaim in a
-lawsuit) alleging that this implementation of Tailscale or any code
-incorporated within this implementation of Tailscale constitutes
-direct or contributory patent infringement, or inducement of patent
-infringement, then any patent rights granted to you under this License
-for this implementation of Tailscale shall terminate as of the date
-such litigation is filed.
-
-Text N055
----------
-// Copyright (c) Tailscale Inc & contributors
-// SPDX-License-Identifier: BSD-3-Clause
-
-package tailscaleroot
-
-import (
-    "bytes"
-    "fmt"
-    "io"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "strings"
-    "testing"
-
-    "tailscale.com/util/set"
-)
-
-// gitTrackedFiles returns the set of files known to git in the current
-// directory tree, or nil if the tree is not a git checkout or git is
-// unavailable.
-func gitTrackedFiles(t *testing.T) set.Set[string] {
-    out, err := exec.Command("git", "ls-files", "-z").Output()
-    if err != nil {
-        t.Logf("git ls-files failed (%v); checking all files", err)
-        return nil
-    }
-    tracked := set.Set[string]{}
-    for f := range strings.SplitSeq(string(out), "\x00") {
-        if f != "" {
-            tracked.Add(f)
-        }
-    }
-    return tracked
-}
-
-func normalizeLineEndings(b []byte) []byte {
-    return bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
-}
-
-// TestLicenseHeaders checks that all Go files in the tree
-// directory tree have a correct-looking Tailscale license header.
-func TestLicenseHeaders(t *testing.T) {
-    want := normalizeLineEndings([]byte(strings.TrimLeft(`
-// Copyright (c) Tailscale Inc & contributors
-// SPDX-License-Identifier: BSD-3-Clause
-`, "\n")))
-
-    exceptions := set.Of(
-        // Subprocess test harness code
-        "util/winutil/testdata/testrestartableprocesses/main.go",
-        "util/winutil/subprocess_windows_test.go",
-
-        // WireGuard copyright
-        "cmd/tailscale/cli/authenticode_windows.go",
-        "wgengine/router/osrouter/ifconfig_windows.go",
-
-        // noiseexplorer.com copyright
-        "control/controlbase/noiseexplorer_test.go",
-
-        // Generated eBPF management code
-        "derp/xdp/bpf_bpfeb.go",
-        "derp/xdp/bpf_bpfel.go",
-
-        // Generated kube deepcopy funcs file starts with a Go build tag + an empty line
-        "k8s-operator/apis/v1alpha1/zz_generated.deepcopy.go",
-    )
-
-    tracked := gitTrackedFiles(t)
-
-    err := filepath.Walk(".", func(path string, fi os.FileInfo, err error) error {
-        if err != nil {
-            return fmt.Errorf("path %s: %v", path, err)
-        }
-        if tracked != nil && !fi.IsDir() && !tracked.Contains(filepath.ToSlash(path)) {
-            // Ignore files not known to git (scratch files, etc).
-            return nil
-        }
-        if exceptions.Contains(filepath.ToSlash(path)) {
-            return nil
-        }
-        base := filepath.Base(path)
-        switch base {
-        case ".git", "node_modules", "tempfork":
-            return filepath.SkipDir
-        }
-        switch base {
-        case "zsyscall_windows.go":
-            // Generated code.
-            return nil
-        }
-
-        if strings.HasSuffix(base, ".config.ts") {
-            return nil
-        }
-        if strings.HasSuffix(base, "_string.go") {
-            // Generated file from go:generate stringer
-            return nil
-        }
-
-        ext := filepath.Ext(base)
-        switch ext {
-        default:
-            return nil
-        case ".go", ".ts", ".tsx":
-        }
-
-        buf := make([]byte, 512)
-        f, err := os.Open(path)
-        if err != nil {
-            return err
-        }
-        defer f.Close()
-        if n, err := io.ReadAtLeast(f, buf, 512); err != nil && err != io.ErrUnexpectedEOF {
-            return err
-        } else {
-            buf = buf[:n]
-        }
-
-        buf = normalizeLineEndings(buf)
-
-        bufNoTrunc := buf
-        if i := bytes.Index(buf, []byte("\npackage ")); i != -1 {
-            buf = buf[:i]
-        }
-
-        if bytes.Contains(buf, want) {
-            return nil
-        }
-
-        if bytes.Contains(bufNoTrunc, []byte("BSD-3-Clause\npackage ")) {
-            t.Errorf("file %s has license header as a package doc; add a blank line before the package line", path)
-            return nil
-        }
-
-        t.Errorf("file %s is missing Tailscale copyright header:\n\n%s", path, want)
-        return nil
-    })
-    if err != nil {
-        t.Fatalf("Walk: %v", err)
-    }
-}
-
-Text N056
----------
-MIT License
-
-Copyright (c) 2014-present Sebastian McKenzie and other contributors
-
-Text N057
----------
-MIT License
-
-Copyright (c) 2021-present Floating UI contributors
-
-Text N058
----------
-MIT License
-
-Copyright (c) 2017 Anton Korzunov
-
-Text N059
----------
-The MIT License (MIT)
-
-Copyright (c) 2018 Jed Watson
-
-Text N060
----------
-MIT License
-
-Copyright (c) 2017 Ilya Kantor
-
-Text N061
----------
-MIT License
-
-Copyright (c) 2020 Anton Korzunov
-
-Text N062
----------
-MIT License
-
-Copyright (c) 2013-present, Facebook, Inc.
-
-Text N063
----------
-The MIT License (MIT)
-
-Copyright (c) 2014, 2015, 2016, 2017, 2018 Simon Lydell
-
-Text N064
----------
-The MIT License (MIT)
-
-Copyright (c) 2015 Andres Suarez <zertosh@gmail.com>
-
-Text N065
----------
-MIT License
-
-Copyright (c) Facebook, Inc. and its affiliates.
-
-Text N066
----------
-MIT License
-
-Copyright (c) 2023 Vercel, Inc.
-
-Text N067
----------
-MIT License
-
-Copyright (c) Nicolas Gallagher
-Copyright (c) Jonathan Neal
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
-Copyright (c) Adam Wathan
-Copyright (c) Jonathan Reinink
-
-Text N068
----------
-Copyright (c) Bogdan Chadkin <trysound@yandex.ru>
-
-Text N069
----------
-MIT License
-
-Copyright (c) Tailwind Labs, Inc.
-
-Text N070
----------
-Copyright (c) Microsoft Corporation.
-
-Text N071
----------
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
-OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-PERFORMANCE OF THIS SOFTWARE.
-
-Text N072
----------
-MIT License
-
-Copyright (c) 2019 Paul Henschel
-
-Text N073
----------
+Inter font — SIL Open Font License 1.1
+--------------------------------------
 Copyright (c) 2016-2020 The Inter Project Authors.
 "Inter" is trademark of Rasmus Andersson.
 https://github.com/rsms/inter
@@ -1887,8 +642,6 @@ writer or other person who contributed to the Font Software.
 
 PERMISSION AND CONDITIONS
 
-Text N074
----------
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of the Font Software, to use, study, copy, merge, embed, modify,
 redistribute, and sell modified and unmodified copies of the Font

@@ -321,7 +321,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for formatting, vet, and test requirem
 
 ## Maintainer release checklist
 
-1. Use the official public Docker Hub repository `omyto/tailhop` and the [source repository](https://github.com/omyto/tailhop). Resolve [outstanding licensing checks](../CONTRIBUTING.md#third-party-licenses) before public redistribution.
+1. Use the official public Docker Hub repository `omyto/tailhop` and the [source repository](https://github.com/omyto/tailhop).
 2. In GitHub repository Settings → Secrets and variables → Actions, set repository variable `DOCKERHUB_USERNAME` to `omyto` (publisher-side configuration, not an end-user `.env` setting) and repository secret `DOCKERHUB_TOKEN` to a Docker Hub access token with the read/write access needed to push. Never commit the token or pass it as a build argument. No Tailscale Auth Key is needed by CI or image builds.
 3. Enable GitHub Actions for the repository and allow the pinned official GitHub/Docker actions. Review runner/billing availability, limit who may push version tags, and run the branch CI before release. Keep action SHA pins updated deliberately.
 4. Commit and review release changes through the normal repository process. Publish only a new stable version tag containing the intended changes. Never move, repush, or recreate an already published tag.

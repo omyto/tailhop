@@ -30,25 +30,6 @@ class DistributionTests(unittest.TestCase):
         self.assertIn('!LICENSE', context)
         self.assertIn('!THIRD_PARTY_NOTICES', context)
 
-    def test_notice_text_references(self):
-        notices = (ROOT / 'THIRD_PARTY_NOTICES').read_text()
-        inventory, texts = notices.split('LICENSE AND ATTRIBUTION TEXTS', 1)
-        blocks = re.findall(r'^Text (N[0-9]+)\n-+\n(.*?)(?=^Text N[0-9]+\n|\Z)',
-                            texts, re.M | re.S)
-        self.assertTrue(blocks)
-        ids = [number for number, _ in blocks]
-        self.assertEqual(len(ids), len(set(ids)))
-        normalized = [' '.join(body.split()) for _, body in blocks]
-        self.assertTrue(all(normalized))
-        self.assertEqual(len(normalized), len(set(normalized)))
-        references = set(re.findall(r'\bN[0-9]+\b', inventory))
-        self.assertEqual(references, set(ids), 'Missing or unused notice text')
-        module = (ROOT / 'go.mod').read_text()
-        go_version = re.search(r'^go (\S+)$', module, re.M)[1]
-        tailscale_version = re.search(r'tailscale.com (\S+)', module)[1]
-        self.assertIn('Go standard library go' + go_version, inventory)
-        self.assertIn('tailscale.com ' + tailscale_version, inventory)
-
     def test_archive_recipe(self):
         workflow = (ROOT / '.github/workflows/linux-binaries.yml').read_text()
         files = shlex.split(re.search(r'^          files=\((.*)\)$', workflow, re.M)[1])

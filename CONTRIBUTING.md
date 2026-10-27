@@ -56,12 +56,24 @@ the [Docker guide](docs/docker.md#manual-verification) or
 [systemd guide](docs/systemd.md#manual-service-verification). Unit tests do not prove
 live enrollment, ACL enforcement, state permissions, or service sandbox compatibility.
 
-## Dependency licensing
+## Third-party licenses
 
-When changing dependencies or embedded assets, update
-[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) following the
-[licensing audit and maintenance process](docs/licensing.md). Keep upstream
-copyright/license texts and distinguish shipped code from test/build tools.
-Resolve the audit's outstanding browser-asset attribution before public release.
-Run `python3 -m unittest discover -s .github/scripts -p 'test_*.py'` for release
-and distribution checks; these do not contact Docker Hub or publish a release.
+When dependencies, Go, or embedded assets change, review the code actually shipped
+for both Linux architectures and update [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES).
+Preserve copyright statements, applicable grants, Apache notices and source
+obligations; reuse shared texts only when their terms match. `go.sum` also lists
+unshipped build/test dependencies. Run the release/distribution tests:
+
+```sh
+python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+```
+
+Before public redistribution, resolve these remaining checks:
+
+- The linked web-client JS/CSS/font are confirmed present. Verify the prebuilt
+  source revision and the 26 outstanding source-package notices listed in
+  THIRD_PARTY_NOTICES; the source inventory is not yet complete bundle attribution.
+- Inspect rebuilt Docker images for both architectures and verify OS
+  corresponding-source arrangements. The inspected published `0.1.0` images
+  contain Debian license materials but lack Tailhop's license/notice files;
+  the current Dockerfile copies both to `/usr/share/doc/tailhop/` for future builds.

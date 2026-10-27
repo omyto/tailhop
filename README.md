@@ -128,5 +128,4 @@ Focused fixes, tests, and documentation improvements are welcome. Read the
 expectations. [SPEC.md](SPEC.md) provides the implementation reference.
 
 Released under the [MIT license](LICENSE). Third-party terms are retained in
-[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES); see the [licensing audit](docs/licensing.md)
-for outstanding pre-release attribution checks.
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES).

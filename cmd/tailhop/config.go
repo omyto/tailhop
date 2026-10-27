@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -26,7 +28,7 @@ func parseConfig(args []string, getenv func(string) string, output io.Writer) (c
 	for _, setting := range []struct{ flag, env, fallback, usage string }{
 		{"hostname", "TS_HOSTNAME", "tailhop", "Tailscale hostname (DNS label; TS_HOSTNAME)"},
 		{"port", "PROXY_PORT", "8080", "Tailnet TCP port, 1–65535 (PROXY_PORT)"},
-		{"state-dir", "TS_STATE_DIR", "/var/lib/tailhop", "Private persistent tsnet state directory (TS_STATE_DIR)"},
+		{"state-dir", "TS_STATE_DIR", "", "Private persistent tsnet state directory (TS_STATE_DIR; default: absolute XDG_STATE_HOME/tailhop or $HOME/.local/state/tailhop)"},
 		{"log-level", "LOG_LEVEL", "info", "debug, info, warn or error (LOG_LEVEL)"},
 		{"max-clients", "MAX_CLIENTS", "100", "Positive global inbound connection limit (MAX_CLIENTS)"},
 		{"idle-timeout", "IDLE_TIMEOUT", "10m", "Positive Go inactivity duration (IDLE_TIMEOUT)"},
@@ -90,9 +92,28 @@ func parseConfig(args []string, getenv func(string) string, output io.Writer) (c
 		return config{}, fmt.Errorf("--hostname / TS_HOSTNAME must be a DNS label")
 	}
 
-	dir := value("TS_STATE_DIR", "/var/lib/tailhop")
+	dir := value("TS_STATE_DIR", "")
+	if dir == "" && !explicit["state-dir"] {
+		var err error
+		dir, err = defaultStateDir(getenv, os.UserHomeDir)
+		if err != nil {
+			return config{}, err
+		}
+	}
 	if dir == "" {
 		return config{}, fmt.Errorf("--state-dir / TS_STATE_DIR must not be empty")
 	}
 	return config{hostname: hostname, stateDir: dir, port: port, maxClients: maxClients, idle: idle, level: level}, nil
+}
+
+// Ignore relative XDG paths rather than making identity depend on the working directory.
+func defaultStateDir(getenv func(string) string, homeDir func() (string, error)) (string, error) {
+	if xdg := getenv("XDG_STATE_HOME"); filepath.IsAbs(xdg) && !strings.ContainsRune(xdg, 0) {
+		return filepath.Join(xdg, "tailhop"), nil
+	}
+	home, err := homeDir()
+	if err != nil || !filepath.IsAbs(home) || strings.ContainsRune(home, 0) {
+		return "", fmt.Errorf("cannot resolve home directory for state; set --state-dir or TS_STATE_DIR")
+	}
+	return filepath.Join(home, ".local", "state", "tailhop"), nil
 }

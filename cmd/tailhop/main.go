@@ -32,18 +32,9 @@ func start(cfg config) error {
 	hostname, dir := cfg.hostname, cfg.stateDir
 	var err error
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
-	if err = os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("create TS_STATE_DIR: %w", err)
+	if err := prepareStateDir(dir); err != nil {
+		return err
 	}
-	if err = os.Chmod(dir, 0700); err != nil {
-		return fmt.Errorf("secure TS_STATE_DIR: %w", err)
-	}
-	f, err := os.CreateTemp(dir, ".writable-")
-	if err != nil {
-		return fmt.Errorf("TS_STATE_DIR must be writable: %w", err)
-	}
-	f.Close()
-	os.Remove(f.Name())
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	// Keep verbose backend logs suppressed. User status messages may include
@@ -91,6 +82,25 @@ func start(cfg config) error {
 	}
 	return nil
 }
+
+// prepareStateDir secures existing state without deleting or migrating it.
+func prepareStateDir(dir string) error {
+	var err error
+	if err = os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("create TS_STATE_DIR: %w", err)
+	}
+	if err = os.Chmod(dir, 0700); err != nil {
+		return fmt.Errorf("secure TS_STATE_DIR: %w", err)
+	}
+	f, err := os.CreateTemp(dir, ".writable-")
+	if err != nil {
+		return fmt.Errorf("TS_STATE_DIR must be writable: %w", err)
+	}
+	f.Close()
+	os.Remove(f.Name())
+	return nil
+}
+
 func main() {
 	if err := run(); err != nil {
 		slog.Error("tailhop failed", "error", err)

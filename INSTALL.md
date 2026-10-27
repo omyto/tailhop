@@ -98,42 +98,68 @@ Docker and the packaged systemd service continue using `/var/lib/tailhop`.
 
 Use a dedicated non-login account. If an account/group already exists, confirm
 it belongs to tailhop before continuing; do not repurpose an unrelated account.
+Install the binary and unit without creating an environment file:
 
 ```sh
 getent group tailhop >/dev/null || sudo groupadd --system tailhop
 getent passwd tailhop >/dev/null || sudo useradd --system --gid tailhop --home-dir /var/lib/tailhop --no-create-home --shell "$(command -v nologin)" tailhop
 sudo install -o root -g root -m 0755 ./tailhop /usr/local/bin/tailhop
+sudo install -o root -g root -m 0644 packaging/systemd/tailhop.service /etc/systemd/system/tailhop.service
+sudo systemctl daemon-reload
+```
+
+At startup, `StateDirectory=tailhop` creates and owns `/var/lib/tailhop` as
+`tailhop:tailhop` with mode 0700. State persists across restarts and binary updates.
+The unit fixes `--state-dir=/var/lib/tailhop`, taking precedence over `TS_STATE_DIR`.
+Do not delete or replace existing state; installation does not migrate it.
+For direct execution users, follow [the migration guide](#migrate-from-direct-execution-to-systemd)
+before starting the service.
+
+### Optional initial enrollment and configuration
+
+Create `/etc/tailhop/tailhop.env` **only** when supplying an initial `TS_AUTHKEY`
+or overriding defaults. For key-based first-time enrollment, these commands
+preserve any existing file and protect it as root:root with mode 0600:
+
+```sh
 sudo install -d -o root -g root -m 0700 /etc/tailhop
-if ! sudo test -e /etc/tailhop/tailhop.env; then
-  sudo install -o root -g root -m 0600 packaging/systemd/tailhop.env.example /etc/tailhop/tailhop.env
-fi
+sudo sh -c 'umask 077; cp --no-clobber "$1" "$2"' sh packaging/systemd/tailhop.env.example /etc/tailhop/tailhop.env
 sudo chown root:root /etc/tailhop/tailhop.env
 sudo chmod 0600 /etc/tailhop/tailhop.env
 sudoedit /etc/tailhop/tailhop.env
 ```
 
-Before starting, replace the `TS_AUTHKEY` placeholder with an enrollment Auth Key,
-or remove the assignment when reusing valid enrolled state. Keep systemd
-`KEY=value` syntax, without `export` or shell expansion. The unit fixes
-`--state-dir=/var/lib/tailhop`, taking precedence over `TS_STATE_DIR`; systemd creates
-and owns that directory as tailhop:tailhop with mode 0700.
+Replace the placeholder with an appropriate Tailscale enrollment Auth Key,
+not an API access token. For configuration overrides only, remove the `TS_AUTHKEY`
+assignment instead. Use systemd `KEY=value` syntax, without `export` or shell/Compose
+expansion. Optional overrides include `TS_HOSTNAME`, `PROXY_PORT`, `LOG_LEVEL`,
+`MAX_CLIENTS`, and `IDLE_TIMEOUT`; `TS_STATE_DIR` cannot override the unit's flag.
+Tailhop does not parse this file or `.env` itself.
+
+Start the service below and confirm enrollment in the Tailscale device view.
+After successful enrollment, remove `TS_AUTHKEY` with `sudoedit` and restart the
+service to clear it from the running environment. Valid persisted state normally
+needs no new key. If no overrides remain, the environment file can remain absent.
+Environment variables are not a secret store; avoid dumping them, and protect any
+interactive enrollment URL in the journal. Without a key, an uninitialized node
+may offer interactive login instead.
+
+### Start and operate
+
+An already enrolled instance can start **without** `/etc/tailhop/tailhop.env`
+when valid state exists in `/var/lib/tailhop`, the service user can read and write
+it, and no required overrides depend on the file. The unit uses
+`EnvironmentFile=-/etc/tailhop/tailhop.env`, so a missing file is allowed. With
+built-in defaults sufficient, skip the optional setup above.
 
 ```sh
-sudo install -o root -g root -m 0644 packaging/systemd/tailhop.service /etc/systemd/system/tailhop.service
-sudo systemctl daemon-reload
 sudo systemctl enable --now tailhop
 systemctl status tailhop
 sudo journalctl -u tailhop -f
 ```
 
-The environment file is optional (`EnvironmentFile=-/etc/tailhop/tailhop.env`):
-with valid enrolled state, the service can start without it. Keep it only for
-needed overrides or enrollment. The install commands above preserve an existing file.
-
-After enrollment, remove `TS_AUTHKEY` using `sudoedit` and restart to clear it
-from the running environment. The root-only environment file is not a secret
-store; the environment exposure caveats above still apply. Do not delete state.
-Service activation alone does not confirm completed Tailnet enrollment.
+Service activation alone does not confirm completed Tailnet enrollment. Keep
+state intact when restarting or updating:
 
 ```sh
 sudo systemctl restart tailhop

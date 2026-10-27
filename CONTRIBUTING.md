@@ -8,7 +8,7 @@ for the implementation contract and scope before proposing behavioral changes.
 ## Build and test
 
 Run from the repository root with the Go toolchain managed by mise. The module
-requires Go 1.27.1 and pins tailscale.com v1.104.1; the Docker builder uses Go 1.27.2.
+requires Go 1.27.3 and pins tailscale.com v1.104.1; the Docker builder uses Go 1.27.3.
 See [go.mod](go.mod) and [Dockerfile](Dockerfile) for the current requirements.
 
 ```sh

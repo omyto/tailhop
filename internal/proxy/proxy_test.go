@@ -1409,7 +1409,7 @@ func TestHTTPKeepAliveReusesActivityTimer(t *testing.T) {
 	})
 }
 
-func TestHTTPIdleRestoredAfterRejectedConnect(t *testing.T) {
+func TestHTTPAfterRejectedConnect(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		upstream, origin := net.Pipe()
 		defer origin.Close()
@@ -1424,6 +1424,13 @@ func TestHTTPIdleRestoredAfterRejectedConnect(t *testing.T) {
 		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 		synctest.Wait()
+		// Patched net/http closes rejected CONNECT connections instead of allowing
+		// HTTP keep-alive reuse. Verify admission is released, then reconnect.
+		if !resp.Close || countSlots(limited) != 0 {
+			t.Fatal("rejected CONNECT connection not closed")
+		}
+		client.Close()
+		client = pipeClient(l)
 		ready := make(chan struct{})
 		go func() {
 			req, err := http.ReadRequest(bufio.NewReader(origin))
@@ -1448,7 +1455,7 @@ func TestHTTPIdleRestoredAfterRejectedConnect(t *testing.T) {
 		time.Sleep(time.Minute)
 		synctest.Wait()
 		if countSlots(limited) != 0 {
-			t.Fatal("HTTP timer not resumed after CONNECT rejection")
+			t.Fatal("new HTTP connection did not enforce idle timeout")
 		}
 		resp.Body.Close()
 		client.Close()

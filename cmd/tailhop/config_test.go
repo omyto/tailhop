@@ -70,6 +70,8 @@ func TestHelp(t *testing.T) {
 			}
 			t.Setenv("TS_STATE_DIR", t.TempDir()+"/must-not-exist")
 			t.Setenv("PROXY_PORT", "invalid")
+			t.Setenv("TS_AUTHKEY", "help-key-A")
+			t.Setenv("TS_AUTH_KEY", "help-key-B")
 			old := osArgsForTest(arg)
 			defer old()
 			if err := run(); err != nil {
@@ -77,6 +79,9 @@ func TestHelp(t *testing.T) {
 			}
 			if _, err := os.Stat(os.Getenv("TS_STATE_DIR")); !os.IsNotExist(err) {
 				t.Fatalf("help created state: %v", err)
+			}
+			if os.Getenv("TS_AUTHKEY") != "help-key-A" || os.Getenv("TS_AUTH_KEY") != "help-key-B" {
+				t.Fatal("help changed authentication environment")
 			}
 		})
 	}
@@ -199,39 +204,66 @@ func TestCLIExitStatus(t *testing.T) {
 
 func TestAuthConfiguration(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		args      []string
-		env, want string
+		name              string
+		args              []string
+		env, legacy, want string
+		explicit          bool
 	}{
-		{"cli", []string{"--auth-key=cli-secret"}, "", "cli-secret"},
-		{"environment", nil, "env-secret", "env-secret"},
-		{"precedence", []string{"--auth-key", "cli-secret"}, "env-secret", "cli-secret"},
-		{"interactive", nil, "", ""},
-		{"explicit empty", []string{"--auth-key="}, "env-secret", ""},
+		{"interactive", nil, "", "", "", false},
+		{"environment", nil, "key-A", "", "key-A", false},
+		{"legacy", nil, "", "key-B", "key-B", false},
+		{"environment priority", nil, "key-A", "key-B", "key-A", false},
+		{"cli priority", []string{"--auth-key=key-C"}, "key-A", "key-B", "key-C", true},
+		{"empty overrides both", []string{"--auth-key="}, "key-A", "key-B", "", true},
+		{"empty overrides legacy", []string{"--auth-key="}, "", "key-B", "", true},
+		{"empty overrides environment", []string{"--auth-key="}, "key-A", "", "", true},
+		{"cli only", []string{"--auth-key", "key-C"}, "", "", "key-C", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var out bytes.Buffer
-			cfg, err := parseConfig(tc.args, func(k string) string {
-				if k == "TS_AUTHKEY" {
-					return tc.env
+			for name, value := range map[string]string{"TS_AUTHKEY": tc.env, "TS_AUTH_KEY": tc.legacy} {
+				t.Setenv(name, value)
+				if value == "" {
+					if err := os.Unsetenv(name); err != nil {
+						t.Fatal(err)
+					}
 				}
-				return ""
-			}, &out)
+			}
+			// Other tsnet credential mechanisms must remain untouched.
+			t.Setenv("TS_CLIENT_SECRET", "independent-credential")
+			var out bytes.Buffer
+			cfg, err := parseConfig(tc.args, os.Getenv, &out)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if cfg.authKey != tc.want {
-				t.Fatal("incorrect authentication precedence")
+			if cfg.authKey != tc.want || cfg.authKeyExplicit != tc.explicit {
+				t.Fatal("incorrect authentication precedence or CLI tracking")
 			}
 			if out.Len() != 0 {
 				t.Fatal("parser printed configuration")
 			}
-			t.Setenv("TS_AUTHKEY", tc.env)
-			if err := prepareAuth(cfg.authKey); err != nil {
+			secrets := authSecrets(tc.args, os.Getenv)
+			if err := prepareAuth(cfg); err != nil {
 				t.Fatal(err)
 			}
-			if cfg.authKey == "" && os.Getenv("TS_AUTHKEY") != "" {
-				t.Fatal("tsnet would reuse overridden environment key")
+			for name, original := range map[string]string{"TS_AUTHKEY": tc.env, "TS_AUTH_KEY": tc.legacy} {
+				got, present := os.LookupEnv(name)
+				if tc.explicit && tc.want == "" {
+					if present {
+						t.Fatal("explicit empty left a tsnet auth-key fallback")
+					}
+				} else if got != original || present != (original != "") {
+					t.Fatal("authentication environment changed without explicit empty override")
+				}
+			}
+			if os.Getenv("TS_CLIENT_SECRET") != "independent-credential" {
+				t.Fatal("unrelated credential modified")
+			}
+			// This snapshot is shared by startup-error and tsnet UserLogf redaction.
+			message := redactSecrets("startup and tsnet message: key-A key-B key-C", secrets...)
+			for _, secret := range []string{tc.env, tc.legacy, tc.want} {
+				if secret != "" && strings.Contains(message, secret) {
+					t.Fatal("key lost from redaction after environment cleanup")
+				}
 			}
 		})
 	}
@@ -245,11 +277,15 @@ func TestAuthKeyDiagnostics(t *testing.T) {
 		{"---bad=cli-secret", "--auth-key", "cli-secret"},
 		{"--auth-key=cli-secret", "--port=bad"},
 		{"--auth-key"},
+		{"--legacy-secret"},
 	} {
 		var out bytes.Buffer
 		_, err := parseConfig(args, func(k string) string {
 			if k == "TS_AUTHKEY" {
 				return "env-secret"
+			}
+			if k == "TS_AUTH_KEY" {
+				return "legacy-secret"
 			}
 			return ""
 		}, &out)
@@ -257,7 +293,7 @@ func TestAuthKeyDiagnostics(t *testing.T) {
 			t.Fatal("expected help or validation error")
 		}
 		message := err.Error() + out.String()
-		for _, secret := range []string{"cli-secret", "env-secret"} {
+		for _, secret := range []string{"cli-secret", "env-secret", "legacy-secret"} {
 			if strings.Contains(message, secret) {
 				t.Fatal("auth key leaked in diagnostic")
 			}
@@ -265,5 +301,37 @@ func TestAuthKeyDiagnostics(t *testing.T) {
 	}
 	if got := redactSecrets("bad cli-secret and env-secret", "cli-secret", "env-secret"); strings.Contains(got, "secret") {
 		t.Fatal("log redaction failed")
+	}
+}
+
+func TestAuthStartupErrorRedaction(t *testing.T) {
+	t.Setenv("TS_AUTHKEY", "startup-key-A")
+	t.Setenv("TS_AUTH_KEY", "startup-key-B")
+	t.Setenv("PROXY_PORT", "8080")
+	t.Setenv("MAX_CLIENTS", "100")
+	t.Setenv("IDLE_TIMEOUT", "10m")
+	t.Setenv("LOG_LEVEL", "info")
+	t.Setenv("TS_HOSTNAME", "tailhop")
+	// A non-directory forces startup to fail locally before any tsnet operation.
+	path := t.TempDir() + "/startup-key-A-startup-key-B-startup-key-C"
+	if err := os.WriteFile(path, []byte("preserved"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TS_STATE_DIR", path)
+	old := os.Args
+	os.Args = []string{"tailhop", "--auth-key=startup-key-C"}
+	defer func() { os.Args = old }()
+	err := run()
+	if err == nil {
+		t.Fatal("expected local startup error")
+	}
+	for _, key := range []string{"startup-key-A", "startup-key-B", "startup-key-C"} {
+		if strings.Contains(err.Error(), key) {
+			t.Fatal("startup error exposed an auth key")
+		}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "preserved" {
+		t.Fatal("startup error changed existing data")
 	}
 }

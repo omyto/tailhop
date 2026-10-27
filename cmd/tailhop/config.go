@@ -15,6 +15,7 @@ import (
 type config struct {
 	hostname, stateDir string
 	authKey            string
+	authKeyExplicit    bool
 	port, maxClients   int
 	idle               time.Duration
 	level              slog.Level
@@ -122,7 +123,7 @@ func parseConfig(args []string, getenv func(string) string, output io.Writer) (c
 	if dir == "" {
 		return config{}, fmt.Errorf("--state-dir / TS_STATE_DIR must not be empty")
 	}
-	return config{authKey: value("TS_AUTHKEY", ""), hostname: hostname, stateDir: dir, port: port, maxClients: maxClients, idle: idle, level: level}, nil
+	return config{authKey: value("TS_AUTHKEY", getenv("TS_AUTH_KEY")), authKeyExplicit: explicit["auth-key"], hostname: hostname, stateDir: dir, port: port, maxClients: maxClients, idle: idle, level: level}, nil
 }
 
 // Ignore relative XDG paths rather than making identity depend on the working directory.
@@ -139,7 +140,7 @@ func defaultStateDir(getenv func(string) string, homeDir func() (string, error))
 
 // Collect CLI keys even after an invalid flag so diagnostics cannot echo them.
 func authSecrets(args []string, getenv func(string) string) []string {
-	secrets := []string{getenv("TS_AUTHKEY")}
+	secrets := []string{getenv("TS_AUTHKEY"), getenv("TS_AUTH_KEY")}
 	for i, arg := range args {
 		name, value, assigned := strings.Cut(arg, "=")
 		if name != "--auth-key" && name != "-auth-key" {

@@ -23,8 +23,11 @@ Unknown flags, positional arguments, and invalid configuration fail with a non-z
 
 No configuration file is required. CLI flags are recommended for direct execution;
 environment variables remain supported for automation and backward compatibility.
-`--auth-key=` explicitly overrides `TS_AUTHKEY` with an empty value. Without a key,
-tsnet starts interactive login when necessary; valid persisted state needs no new key.
+Auth-key precedence is explicit `--auth-key`, then non-empty `TS_AUTHKEY`, then
+legacy `TS_AUTH_KEY`. `--auth-key=` disables both environment auth-key fallbacks;
+omitting the flag preserves them. This does not disable independent OAuth or
+identity-federation credentials. With no credentials, tsnet starts interactive
+login when necessary; valid persisted state needs no new key.
 Never put an auth key in a permanent service command. CLI keys can appear in shell
 history, process listings and Docker metadata; the flag is not secret management.
 Environment variables can also be inspected by privileged operators.

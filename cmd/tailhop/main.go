@@ -24,13 +24,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if err := start(cfg); err != nil {
-		return errors.New(redactSecrets(err.Error(), authSecrets(os.Args[1:], os.Getenv)...))
+	// Snapshot both environment keys before explicit-empty cleanup.
+	secrets := authSecrets(os.Args[1:], os.Getenv)
+	if err := start(cfg, secrets); err != nil {
+		return errors.New(redactSecrets(err.Error(), secrets...))
 	}
 	return nil
 }
 
-func start(cfg config) error {
+func start(cfg config, secrets []string) error {
 	port, maxClients, idle, level := cfg.port, cfg.maxClients, cfg.idle, cfg.level
 	hostname, dir := cfg.hostname, cfg.stateDir
 	var err error
@@ -38,9 +40,8 @@ func start(cfg config) error {
 	if err := prepareStateDir(dir); err != nil {
 		return err
 	}
-	// tsnet falls back to TS_AUTHKEY when Server.AuthKey is empty. Clear that
-	// fallback so an explicit empty CLI value really overrides the environment.
-	if err := prepareAuth(cfg.authKey); err != nil {
+	// Only explicit empty CLI authentication disables tsnet's environment fallbacks.
+	if err := prepareAuth(cfg); err != nil {
 		return err
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -53,7 +54,7 @@ func start(cfg config) error {
 		AuthKey:  cfg.authKey,
 		Logf:     func(string, ...any) {},
 		UserLogf: func(format string, args ...any) {
-			logger.Info("tsnet", "message", redactSecrets(fmt.Sprintf(format, args...), cfg.authKey, os.Getenv("TS_AUTHKEY")))
+			logger.Info("tsnet", "message", redactSecrets(fmt.Sprintf(format, args...), secrets...))
 		},
 	}
 	defer node.Close()
@@ -76,7 +77,7 @@ func start(cfg config) error {
 	case <-ctx.Done():
 	case err = <-served:
 		if err != nil && err != http.ErrServerClosed {
-			logger.Error("listener stopped", "error", err)
+			logger.Error("listener stopped", "error", redactSecrets(err.Error(), secrets...))
 		}
 	}
 	serveErr := err
@@ -91,9 +92,13 @@ func start(cfg config) error {
 	return nil
 }
 
-func prepareAuth(authKey string) error {
-	if authKey == "" {
-		return os.Unsetenv("TS_AUTHKEY")
+func prepareAuth(cfg config) error {
+	if cfg.authKeyExplicit && cfg.authKey == "" {
+		for _, name := range []string{"TS_AUTHKEY", "TS_AUTH_KEY"} {
+			if err := os.Unsetenv(name); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

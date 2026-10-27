@@ -1,7 +1,7 @@
-# Set these in .env after the owner publishes the chosen version.
+# Select an explicitly published version in .env; no latest tag is assumed.
 services:
   tailhop:
-    image: "${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME to the publishing Docker Hub username}/tailhop:${TAILHOP_VERSION:?Set TAILHOP_VERSION to a published version such as 0.1.0}"
+    image: "omyto/tailhop:${TAILHOP_VERSION:?Set TAILHOP_VERSION to a published version such as 0.1.0}"
     restart: unless-stopped
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY:-}

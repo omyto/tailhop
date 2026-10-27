@@ -15,3 +15,7 @@ internal/**
 !internal/proxy
 internal/proxy/**
 !internal/proxy/*.go
+
+# Required licensing materials copied into the final runtime image.
+!LICENSE
+!THIRD_PARTY_NOTICES

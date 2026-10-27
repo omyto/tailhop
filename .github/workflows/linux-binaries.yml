@@ -56,7 +56,7 @@ jobs:
           printf 'commit=%s\n' "$commit" >> "$GITHUB_OUTPUT"
       - name: Check tagged installation inputs
         run: |
-          for file in LICENSE INSTALL.md packaging/systemd/tailhop.service packaging/systemd/tailhop.env.example; do
+          for file in LICENSE THIRD_PARTY_NOTICES INSTALL.md packaging/systemd/tailhop.service packaging/systemd/tailhop.env.example; do
             if ! git cat-file -e "HEAD:$file"; then
               echo "::error::Release tag lacks $file; use a tag containing the self-contained installation files."
               exit 1
@@ -85,13 +85,13 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
         run: |
-          git diff --exit-code HEAD -- cmd internal go.mod go.sum LICENSE INSTALL.md packaging/systemd
+          git diff --exit-code HEAD -- cmd internal go.mod go.sum LICENSE THIRD_PARTY_NOTICES INSTALL.md packaging/systemd
           out="$RUNNER_TEMP/tailhop-linux-binaries"
           mkdir -p "$out"
           work=$(mktemp -d)
           trap 'rm -rf "$work"' EXIT
           epoch=$(git show -s --format=%ct HEAD)
-          files=(tailhop LICENSE INSTALL.md packaging/systemd/tailhop.service packaging/systemd/tailhop.env.example)
+          files=(tailhop LICENSE THIRD_PARTY_NOTICES INSTALL.md packaging/systemd/tailhop.service packaging/systemd/tailhop.env.example)
           printf '%s\n' "${files[@]}" | LC_ALL=C sort > "$work/expected-files"
           for arch in amd64 arm64; do
             stage="$work/$arch"
@@ -134,12 +134,12 @@ jobs:
               exit 1
             fi
             cp "$stage/packaging/systemd/tailhop.env.example" "$extracted/packaging/systemd/tailhop.env.example"
-            rm "$extracted/INSTALL.md"
+            rm "$extracted/THIRD_PARTY_NOTICES"
             if verify_files > "$work/missing.log" 2>&1; then
               echo '::error::File verification accepted a missing file'
               exit 1
             fi
-            cp "$stage/INSTALL.md" "$extracted/INSTALL.md"
+            cp "$stage/THIRD_PARTY_NOTICES" "$extracted/THIRD_PARTY_NOTICES"
             verify_files
             hash=$(sha256sum "$archive")
             printf '%s_sha256=%s\n' "$arch" "${hash%% *}" >> "$GITHUB_OUTPUT"

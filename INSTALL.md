@@ -30,21 +30,26 @@ extracted directory. Only the systemd administration commands need sudo.
 
 ## Run directly as an unprivileged user
 
-In Bash, configure the process and create private, persistent state:
+Inspect flags, then run with defaults or customize the hostname and port:
 
 ```bash
-umask 077
-export TS_HOSTNAME=tailhop
-export TS_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/tailhop"
-install -d -m 0700 "$TS_STATE_DIR"
-export PROXY_PORT=8080
-export LOG_LEVEL=info
-export MAX_CLIENTS=100
-export IDLE_TIMEOUT=10m
+./tailhop --help
+./tailhop
+./tailhop --hostname tailhop-home --port 8080
+```
+
+The default state directory is `$XDG_STATE_HOME/tailhop` when `XDG_STATE_HOME`
+is absolute, otherwise `$HOME/.local/state/tailhop`. Tailhop creates it privately
+with mode 0700 and checks writability. Relative or invalid XDG paths fall back to
+the home directory. The working directory never determines the default.
+
+For first-time enrollment using a key, in Bash:
+
+```bash
 read -r -s -p 'Tailscale Auth Key for initial enrollment: ' TS_AUTHKEY
 printf '\n'
 export TS_AUTHKEY
-./tailhop
+./tailhop --hostname tailhop-home --port 8080
 unset TS_AUTHKEY
 ```
 
@@ -58,26 +63,36 @@ interactive enrollment URL; treat that URL as a secret too.
 Press Ctrl-C (SIGINT) to stop gracefully, or send `kill -TERM <pid>` from another
 terminal. The proxy drains requests/tunnels for up to ten seconds, then closes
 remaining connections. Once the process exits, the example unsets the key.
-Restart with the same non-secret environment and state directory:
+Restart with the same flags and state directory:
 
 ```bash
 unset TS_AUTHKEY
-./tailhop
+./tailhop --hostname tailhop-home --port 8080
 ```
 
 Valid enrolled state reuses the node identity without a new key. Keep the state
-directory private and persistent; protect backups as credentials. A new shell
-needs the same environment exports again, but not the enrollment prompt.
+directory private and persistent; protect backups as credentials. Customize other
+settings with flags, for example:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `TS_AUTHKEY` | unset | Initial Tailscale enrollment; omit with valid enrolled state. |
-| `TS_HOSTNAME` | `tailhop` | Node hostname (DNS label). |
-| `TS_STATE_DIR` | `/var/lib/tailhop` | Private writable persistent state; direct execution above overrides this. |
-| `PROXY_PORT` | `8080` | Tailnet listener port, 1–65535. |
-| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
-| `MAX_CLIENTS` | `100` | Positive global inbound TCP connection limit, not per client. |
-| `IDLE_TIMEOUT` | `10m` | Positive Go duration; HTTP/CONNECT inactivity in either direction. |
+```bash
+./tailhop \
+  --state-dir "$HOME/.local/state/tailhop" \
+  --max-clients 200 \
+  --idle-timeout 15m
+```
+
+CLI flags take precedence over non-empty environment variables, then defaults.
+`TS_AUTHKEY` is environment-only; there is no auth-key flag. Tailhop does not
+parse `.env` files. The six flags are `--hostname`, `--port`, `--state-dir`,
+`--log-level`, `--max-clients`, and `--idle-timeout`; see `./tailhop --help`
+for defaults and accepted values. `-h` also displays help without starting tsnet.
+
+**Upgrading an existing native installation:** the old default was
+`/var/lib/tailhop`. Keep using it with `./tailhop --state-dir /var/lib/tailhop`
+or `TS_STATE_DIR=/var/lib/tailhop ./tailhop` to preserve identity (the runtime
+user still needs access). Tailhop does not discover or migrate old state.
+Using a different directory may enroll a new node; it never deletes old state.
+Docker and the packaged systemd service continue using `/var/lib/tailhop`.
 
 ## Install as a systemd service
 
@@ -99,8 +114,8 @@ sudoedit /etc/tailhop/tailhop.env
 
 Before starting, replace the `TS_AUTHKEY` placeholder with an enrollment Auth Key,
 or remove the assignment when reusing valid enrolled state. Keep systemd
-`KEY=value` syntax, without `export` or shell expansion. Never override
-`TS_STATE_DIR` here: the unit fixes it at `/var/lib/tailhop` and systemd creates
+`KEY=value` syntax, without `export` or shell expansion. The unit fixes
+`--state-dir=/var/lib/tailhop`, taking precedence over `TS_STATE_DIR`; systemd creates
 and owns that directory as tailhop:tailhop with mode 0700.
 
 ```sh
@@ -110,6 +125,10 @@ sudo systemctl enable --now tailhop
 systemctl status tailhop
 sudo journalctl -u tailhop -f
 ```
+
+The environment file is optional (`EnvironmentFile=-/etc/tailhop/tailhop.env`):
+with valid enrolled state, the service can start without it. Keep it only for
+needed overrides or enrollment. The install commands above preserve an existing file.
 
 After enrollment, remove `TS_AUTHKEY` using `sudoedit` and restart to clear it
 from the running environment. The root-only environment file is not a secret
@@ -162,7 +181,7 @@ Keep `/etc/tailhop/tailhop.env` and `/var/lib/tailhop` intact. If updating the
 unit too, install the bundled unit and run `sudo systemctl daemon-reload` before
 restarting. Repeat the curl check and confirm the same Tailscale device identity.
 For direct execution, stop the old process, replace its executable, and restart
-with the same state path and non-secret environment.
+with the same state path and flags.
 
 To uninstall the systemd service and binary:
 

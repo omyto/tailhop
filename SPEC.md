@@ -72,13 +72,13 @@ The scope is public-internet egress only. Do not introduce a private-subnet allo
 
 ## 5. Configuration
 
-Use only environment variables. Validate configuration early; report useful errors without exposing secrets.
+Use standard Go flags with precedence CLI flags > non-empty environment variables > defaults. Keep TS_AUTHKEY environment-only; do not parse configuration files or dotenv. Validate configuration early; report useful errors without exposing secrets. Help must exit without startup side effects. See [configuration reference](docs/configuration.md) for flags and accepted values.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TS_AUTHKEY` | unset | Auth key for initial node enrollment; `tsnet` may read it directly. Already-enrolled persistent state should work without it. |
 | `TS_HOSTNAME` | `tailhop` | Tailscale node hostname, set through `tsnet.Server.Hostname`. |
-| `TS_STATE_DIR` | `/var/lib/tailhop` | Directory passed to `tsnet.Server.Dir`; create if needed with secure permissions and ensure writable by the runtime user. Persist in Docker; native systemd packaging fixes this at /var/lib/tailhop. |
+| `TS_STATE_DIR` | Absolute `$XDG_STATE_HOME/tailhop`, otherwise `$HOME/.local/state/tailhop` | Directory passed to `tsnet.Server.Dir`; create if needed with secure permissions and ensure writable by the runtime user. Persist in Docker; native systemd packaging fixes this at /var/lib/tailhop. |
 | `PROXY_PORT` | `8080` | Tailnet-only listening TCP port, valid 1–65535. |
 | `LOG_LEVEL` | `info` | One of `debug`, `info`, `warn`, `error`. |
 | `MAX_CLIENTS` | `100` | Positive integer; global simultaneous inbound TCP connection limit, not per IP. |
@@ -140,8 +140,8 @@ Add at most one small extra internal Go file if it materially improves clarity. 
 ### Native Linux systemd alternative
 
 - Provide packaging/systemd/tailhop.service and packaging/systemd/tailhop.env.example. Use the existing executable at /usr/local/bin/tailhop with Type=simple; do not claim readiness notification.
-- Run as a persistent, dedicated non-login system user/group named tailhop. Use StateDirectory=tailhop and StateDirectoryMode=0700; set TS_STATE_DIR=/var/lib/tailhop in the unit and document that it must not be overridden for this layout.
-- Read /etc/tailhop/tailhop.env using EnvironmentFile syntax. Document root ownership and mode 0600, environment-variable secret exposure, initial enrollment, and removing TS_AUTHKEY after successful enrollment while preserving valid state.
+- Run as a persistent, dedicated non-login system user/group named tailhop. Use StateDirectory=tailhop and StateDirectoryMode=0700; fix `--state-dir=/var/lib/tailhop` in ExecStart, taking precedence over environment settings.
+- Read optional /etc/tailhop/tailhop.env using EnvironmentFile=- syntax. Document root ownership and mode 0600, environment-variable secret exposure, initial enrollment, and removing TS_AUTHKEY after successful enrollment while preserving valid state.
 - Order after and want network-online.target. Use Restart=on-failure with a five-second delay, TimeoutStopSec=20s, default SIGTERM and journald logging, and WantedBy=multi-user.target for boot startup.
 - Apply NoNewPrivileges=true, UMask=0077, ProtectSystem=strict, and ProtectHome=true. PrivateTmp=true supplies writable private temporary storage; StateDirectory remains the persistent writable exception. Do not restrict networking/DNS or require root execution, TUN, capabilities, firewall changes, or a separate tailscaled daemon.
 - Document manual installation, operations, binary replacement with identity preservation, and uninstallation that retains configuration and state. Do not automatically install/start the service or delete persistent data. This native service packaging supports Linux with systemd.

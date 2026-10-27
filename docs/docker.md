@@ -4,6 +4,11 @@ Use the [source-build Compose file](../compose.yaml) to build locally, or the [r
 
 The first intended release is `0.1.0`; this guide does not establish that an image is already available. The publisher must supply the actual Docker Hub namespace. The GitHub source repository remains private; public images do not require repository access to run.
 
+Compose uses `.env` for interpolation and passes environment variables to Tailhop.
+Tailhop does not parse `.env` itself. Environment-only configuration remains
+supported; the image and both Compose files set `TS_STATE_DIR=/var/lib/tailhop`,
+so native XDG/home defaults do not change container identity or persistence.
+
 ## Deploy a prebuilt image
 
 Obtain `compose.release.yaml` and `.env.example` from the checkout or the maintainer, and put them in your deployment directory. Users without private repository access need these files supplied separately. Run the following from that directory:

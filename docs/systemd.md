@@ -81,7 +81,9 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now tailhop
 ```
 
-Before starting, replace the TS_AUTHKEY placeholder with an appropriate enrollment key, or remove its assignment if reusing valid enrolled state. The [environment example](../packaging/systemd/tailhop.env.example) uses systemd `EnvironmentFile` syntax: `KEY=value`, without `export` or shell/Compose variable expansion. The [configuration table](configuration.md) applies to both deployments. Keep TS_STATE_DIR at **/var/lib/tailhop**: the unit sets it, and it must not be overridden in the environment file.
+Before starting, replace the TS_AUTHKEY placeholder with an appropriate enrollment key, or remove its assignment if reusing valid enrolled state. The [environment example](../packaging/systemd/tailhop.env.example) uses systemd `EnvironmentFile` syntax: `KEY=value`, without `export` or shell/Compose variable expansion. The [configuration table](configuration.md) applies to both deployments. The unit fixes `ExecStart=/usr/local/bin/tailhop --state-dir=/var/lib/tailhop`; CLI precedence prevents `TS_STATE_DIR` in an environment file from changing that path.
+
+The environment file is optional (`EnvironmentFile=-/etc/tailhop/tailhop.env`). With valid enrolled state, the service can start without it. Initial key enrollment uses the file above; it may also hold non-secret overrides. Tailhop does not parse this file or `.env` itself.
 
 systemd reads the root-owned 0600 environment file before switching to `User=tailhop` / `Group=tailhop`. Environment variables are not a secret store: root and other processes running as the service account can inspect its environment, and diagnostic tools may expose it. Keep the account dedicated, avoid dumping the environment, and remove TS_AUTHKEY with `sudoedit` after successful enrollment. Restart the service to remove the key from the running process's environment. Valid persisted state reuses the same node identity without a new key; protect any interactive enrollment URL in the journal as a secret too.
 

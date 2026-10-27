@@ -36,6 +36,25 @@ docker compose logs --tail=50
 
 Compose builds from local source. Confirm the node appears in the Tailscale admin console. See the [Docker guide](docs/docker.md) for detailed setup and state persistence.
 
+## Run the Linux binary
+
+Extract a verified Linux release archive, then:
+
+```bash
+./tailhop --help
+./tailhop
+./tailhop --hostname tailhop-home --port 8080
+```
+
+Native state defaults to `$XDG_STATE_HOME/tailhop` when absolute, otherwise
+`$HOME/.local/state/tailhop`. Flags override environment variables, then defaults.
+For initial key enrollment, supply `TS_AUTHKEY` securely through the environment;
+see [INSTALL.md](INSTALL.md) for a silent prompt and systemd installation.
+Restart with the same state directory to reuse identity without a new key.
+Existing native users of `/var/lib/tailhop` should keep it explicitly with
+`--state-dir /var/lib/tailhop`; state is never migrated automatically.
+Tailhop does not load `.env` files; Compose supplies its environment.
+
 ## Use the proxy
 
 From an authorized Tailnet client, test HTTP and HTTPS:
@@ -71,7 +90,7 @@ See the [security guide](docs/security.md) for boundaries, risks, and limitation
   with persistent state and no published ports or privileged runtime requirements.
 - [Linux binary installation](INSTALL.md): run directly or install as a systemd service.
   The [systemd guide](docs/systemd.md) covers private builds and source installation.
-- [Configuration](docs/configuration.md): environment variables, connection limits,
+- [Configuration](docs/configuration.md): CLI flags, environment fallback, connection limits,
   and timeouts.
 
 ## Contributing and license

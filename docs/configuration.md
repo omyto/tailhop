@@ -1,18 +1,55 @@
 # Configuration and connection lifecycle
 
-tailhop reads environment variables at startup and validates them before serving. Unset or empty values use the defaults below. It does not read a configuration file itself: Compose loads `.env` copied from the [Docker environment example](../.env.example), while systemd reads `/etc/tailhop/tailhop.env` installed from its [EnvironmentFile example](../packaging/systemd/tailhop.env.example). systemd syntax is `KEY=value`, without `export` or shell/Compose expansion.
+Tailhop uses Go's standard flags and validates configuration before startup:
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `TS_AUTHKEY` | unset | Initial enrollment key; unnecessary with valid enrolled state. |
-| `TS_HOSTNAME` | `tailhop` | Node hostname; a DNS label of at most 63 ASCII letters, digits, or hyphens, without leading/trailing hyphens. |
-| `TS_STATE_DIR` | `/var/lib/tailhop` | Persistent, private, writable tsnet state directory. |
-| `PROXY_PORT` | `8080` | Tailnet listener TCP port, 1–65535; does not change allowed destination ports. |
-| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
-| `MAX_CLIENTS` | `100` | Positive integer; global simultaneous inbound TCP connection limit. |
-| `IDLE_TIMEOUT` | `10m` | Positive Go duration, such as `30s`, `10m`, or `2h`; HTTP and CONNECT inactivity. |
+```text
+CLI flags > non-empty environment variables > defaults
+```
 
-Keep state private and writable by the runtime user. Both packaged deployments use `/var/lib/tailhop`; the systemd layout requires that path and it must not be overridden in its environment file. See [Docker](docker.md) or [systemd](systemd.md) for ownership and persistence. For direct unprivileged execution, override `TS_STATE_DIR` with a private persistent directory as shown in [INSTALL.md](../INSTALL.md). Do not commit environment files or state.
+Explicit flags win even when equal to a built-in default. Unset or empty
+environment variables use defaults. `./tailhop --help` (or `-h`) exits successfully
+without validating environment configuration, creating directories, or starting tsnet.
+Unknown flags, positional arguments, and invalid configuration fail with a non-zero exit.
+
+| CLI flag | Environment variable | Default | Accepted values / meaning |
+| --- | --- | --- | --- |
+| `--hostname` | `TS_HOSTNAME` | `tailhop` | DNS label: 1–63 ASCII letters, digits, hyphens; no leading/trailing hyphen. |
+| `--port` | `PROXY_PORT` | `8080` | TCP port 1–65535 on the Tailnet; destination ports stay fixed. |
+| `--state-dir` | `TS_STATE_DIR` | XDG/home path below | Non-empty private writable persistent tsnet directory. |
+| `--log-level` | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
+| `--max-clients` | `MAX_CLIENTS` | `100` | Positive integer; global inbound TCP connection limit. |
+| `--idle-timeout` | `IDLE_TIMEOUT` | `10m` | Positive Go duration such as `30s`, `10m`, `2h`. |
+| None | `TS_AUTHKEY` | unset | Initial enrollment key; omit with valid enrolled state. Never pass as a CLI argument. |
+
+For direct execution, use flags:
+
+```bash
+./tailhop --hostname tailhop-home --port 8080
+MAX_CLIENTS=100 ./tailhop --max-clients 200
+```
+
+The last command uses 200. State resolution is `--state-dir`, then non-empty
+`TS_STATE_DIR`, then `$XDG_STATE_HOME/tailhop` if XDG_STATE_HOME is absolute and
+valid, otherwise the current user's home from Go's `os.UserHomeDir` plus
+`.local/state/tailhop`. Relative or invalid XDG paths are ignored. A missing or
+invalid home requires an explicit state path. No default depends on the working directory.
+
+Keep state private (0700), persistent, and writable by the runtime user. Existing
+state is retained; no automatic discovery or migration takes place. **Native upgrades
+from the old `/var/lib/tailhop` default must keep that path explicitly**, with
+`--state-dir /var/lib/tailhop` or `TS_STATE_DIR=/var/lib/tailhop`, to reuse identity.
+A new path may create a new Tailscale node. Restart using the same state directory
+without TS_AUTHKEY after enrollment; see [INSTALL.md](../INSTALL.md).
+
+Docker sets `TS_STATE_DIR=/var/lib/tailhop` and persists it in a volume. The
+packaged systemd unit fixes `--state-dir=/var/lib/tailhop`, so an environment
+variable cannot override it; `StateDirectory=tailhop` manages ownership.
+
+Tailhop does not automatically parse `.env` or any configuration file. Compose's
+`.env` interpolation and systemd's optional `EnvironmentFile` are deployment
+mechanisms that supply environment variables to the process. systemd syntax is
+`KEY=value`, without `export` or shell/Compose expansion. Do not commit environment
+files or state. See [Docker](docker.md) and [systemd](systemd.md).
 
 ## Connection admission
 

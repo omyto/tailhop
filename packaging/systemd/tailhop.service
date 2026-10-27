@@ -7,9 +7,8 @@ After=network-online.target
 Type=simple
 User=tailhop
 Group=tailhop
-ExecStart=/usr/local/bin/tailhop
-EnvironmentFile=/etc/tailhop/tailhop.env
-Environment=TS_STATE_DIR=/var/lib/tailhop
+ExecStart=/usr/local/bin/tailhop --state-dir=/var/lib/tailhop
+EnvironmentFile=-/etc/tailhop/tailhop.env
 StateDirectory=tailhop
 StateDirectoryMode=0700
 Restart=on-failure

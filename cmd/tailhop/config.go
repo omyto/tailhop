@@ -14,6 +14,7 @@ import (
 
 type config struct {
 	hostname, stateDir string
+	authKey            string
 	port, maxClients   int
 	idle               time.Duration
 	level              slog.Level
@@ -37,6 +38,7 @@ func parseConfig(args []string, getenv func(string) string, output io.Writer) (c
 	fs.SetOutput(io.Discard)
 	values := make(map[string]*string)
 	for _, setting := range []struct{ flag, env, fallback, usage string }{
+		{"auth-key", "TS_AUTHKEY", "", "Optional initial enrollment key (TS_AUTHKEY); visible in process arguments"},
 		{"hostname", "TS_HOSTNAME", "tailhop", "Tailscale hostname (DNS label; TS_HOSTNAME)"},
 		{"port", "PROXY_PORT", "8080", "Tailnet TCP port, 1–65535 (PROXY_PORT)"},
 		{"state-dir", "TS_STATE_DIR", "", "Private persistent tsnet state directory (TS_STATE_DIR; default: absolute XDG_STATE_HOME/tailhop or $HOME/.local/state/tailhop)"},
@@ -50,7 +52,7 @@ func parseConfig(args []string, getenv func(string) string, output io.Writer) (c
 	fs.Usage = func() {}
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
-			fmt.Fprintln(output, "Usage: tailhop [flags]\nCLI flags > non-empty environment variables > defaults.\nTS_AUTHKEY is environment-only for initial enrollment; no .env files are loaded.")
+			fmt.Fprintln(output, "Usage: tailhop [flags]\nCLI flags > non-empty environment variables > defaults.\nInteractive login by default; --auth-key or TS_AUTHKEY optionally enrolls a node.\nCLI secrets may appear in shell history, process listings and container metadata.\nNo configuration file is required; .env files are not loaded.")
 			fs.SetOutput(output)
 			fs.PrintDefaults()
 			return config{}, err
@@ -61,9 +63,7 @@ func parseConfig(args []string, getenv func(string) string, output io.Writer) (c
 		if strings.HasPrefix(reason, "bad flag syntax:") {
 			reason, _, _ = strings.Cut(reason, "=")
 		}
-		if key := getenv("TS_AUTHKEY"); key != "" {
-			reason = strings.ReplaceAll(reason, key, "[redacted]")
-		}
+		reason = redactSecrets(reason, authSecrets(args, getenv)...)
 		return config{}, flagParseError{cause: err, reason: reason}
 	}
 	if fs.NArg() != 0 {
@@ -71,7 +71,7 @@ func parseConfig(args []string, getenv func(string) string, output io.Writer) (c
 	}
 	explicit := make(map[string]bool)
 	fs.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
-	keys := map[string]string{"TS_HOSTNAME": "hostname", "PROXY_PORT": "port", "TS_STATE_DIR": "state-dir", "LOG_LEVEL": "log-level", "MAX_CLIENTS": "max-clients", "IDLE_TIMEOUT": "idle-timeout"}
+	keys := map[string]string{"TS_AUTHKEY": "auth-key", "TS_HOSTNAME": "hostname", "PROXY_PORT": "port", "TS_STATE_DIR": "state-dir", "LOG_LEVEL": "log-level", "MAX_CLIENTS": "max-clients", "IDLE_TIMEOUT": "idle-timeout"}
 	value := func(key, fallback string) string {
 		if explicit[keys[key]] {
 			return *values[key]
@@ -122,7 +122,7 @@ func parseConfig(args []string, getenv func(string) string, output io.Writer) (c
 	if dir == "" {
 		return config{}, fmt.Errorf("--state-dir / TS_STATE_DIR must not be empty")
 	}
-	return config{hostname: hostname, stateDir: dir, port: port, maxClients: maxClients, idle: idle, level: level}, nil
+	return config{authKey: value("TS_AUTHKEY", ""), hostname: hostname, stateDir: dir, port: port, maxClients: maxClients, idle: idle, level: level}, nil
 }
 
 // Ignore relative XDG paths rather than making identity depend on the working directory.
@@ -135,4 +135,30 @@ func defaultStateDir(getenv func(string) string, homeDir func() (string, error))
 		return "", fmt.Errorf("cannot resolve home directory for state; set --state-dir or TS_STATE_DIR")
 	}
 	return filepath.Join(home, ".local", "state", "tailhop"), nil
+}
+
+// Collect CLI keys even after an invalid flag so diagnostics cannot echo them.
+func authSecrets(args []string, getenv func(string) string) []string {
+	secrets := []string{getenv("TS_AUTHKEY")}
+	for i, arg := range args {
+		name, value, assigned := strings.Cut(arg, "=")
+		if name != "--auth-key" && name != "-auth-key" {
+			continue
+		}
+		if assigned {
+			secrets = append(secrets, value)
+		} else if i+1 < len(args) {
+			secrets = append(secrets, args[i+1])
+		}
+	}
+	return secrets
+}
+
+func redactSecrets(message string, secrets ...string) string {
+	for _, secret := range secrets {
+		if secret != "" {
+			message = strings.ReplaceAll(message, secret, "[redacted]")
+		}
+	}
+	return message
 }

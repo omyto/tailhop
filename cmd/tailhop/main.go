@@ -24,7 +24,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	return start(cfg)
+	if err := start(cfg); err != nil {
+		return errors.New(redactSecrets(err.Error(), authSecrets(os.Args[1:], os.Getenv)...))
+	}
+	return nil
 }
 
 func start(cfg config) error {
@@ -35,6 +38,11 @@ func start(cfg config) error {
 	if err := prepareStateDir(dir); err != nil {
 		return err
 	}
+	// tsnet falls back to TS_AUTHKEY when Server.AuthKey is empty. Clear that
+	// fallback so an explicit empty CLI value really overrides the environment.
+	if err := prepareAuth(cfg.authKey); err != nil {
+		return err
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	// Keep verbose backend logs suppressed. User status messages may include
@@ -42,10 +50,10 @@ func start(cfg config) error {
 	node := &tsnet.Server{
 		Hostname: hostname,
 		Dir:      dir,
-		AuthKey:  os.Getenv("TS_AUTHKEY"),
+		AuthKey:  cfg.authKey,
 		Logf:     func(string, ...any) {},
 		UserLogf: func(format string, args ...any) {
-			logger.Info("tsnet", "message", fmt.Sprintf(format, args...))
+			logger.Info("tsnet", "message", redactSecrets(fmt.Sprintf(format, args...), cfg.authKey, os.Getenv("TS_AUTHKEY")))
 		},
 	}
 	defer node.Close()
@@ -79,6 +87,13 @@ func start(cfg config) error {
 	}
 	if serveErr != nil && serveErr != http.ErrServerClosed {
 		return fmt.Errorf("proxy listener failed: %w", serveErr)
+	}
+	return nil
+}
+
+func prepareAuth(authKey string) error {
+	if authKey == "" {
+		return os.Unsetenv("TS_AUTHKEY")
 	}
 	return nil
 }

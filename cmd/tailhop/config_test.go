@@ -107,13 +107,13 @@ func TestAllSettings(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := config{tc.hostname, tc.dir, tc.port, tc.clients, tc.idle, tc.level}
+			want := config{hostname: tc.hostname, stateDir: tc.dir, port: tc.port, maxClients: tc.clients, idle: tc.idle, level: tc.level}
 			if cfg != want {
 				t.Fatalf("got %+v want %+v", cfg, want)
 			}
 		})
 	}
-	for _, args := range [][]string{{"--hostname="}, {"--state-dir="}, {"--port=bad"}, {"--max-clients=0"}, {"--idle-timeout=0s"}, {"--log-level=trace"}, {"--auth-key=secret-value"}} {
+	for _, args := range [][]string{{"--hostname="}, {"--state-dir="}, {"--port=bad"}, {"--max-clients=0"}, {"--idle-timeout=0s"}, {"--log-level=trace"}} {
 		var out bytes.Buffer
 		_, err := parseConfig(args, func(string) string { return "" }, &out)
 		if err == nil {
@@ -133,8 +133,8 @@ func TestFlagErrors(t *testing.T) {
 	}{
 		{"unknown", []string{"--max-client", "200"}, "flag provided but not defined: -max-client"},
 		{"missing", []string{"--hostname"}, "flag needs an argument: -hostname"},
-		{"auth assignment", []string{"--auth-key=secret-value"}, "flag provided but not defined: -auth-key"},
-		{"auth separate", []string{"--auth-key", "secret-value"}, "flag provided but not defined: -auth-key"},
+		{"auth assignment", []string{"--auth-key=secret-value", "--max-client"}, "flag provided but not defined: -max-client"},
+		{"auth separate", []string{"--auth-key", "secret-value", "--max-client"}, "flag provided but not defined: -max-client"},
 		{"malformed assignment", []string{"---auth-key=secret-value"}, "bad flag syntax: ---auth-key"},
 		{"secret as flag", []string{"--secret-value"}, "flag provided but not defined: -[redacted]"},
 	} {
@@ -194,5 +194,76 @@ func TestCLIExitStatus(t *testing.T) {
 				t.Fatalf("created state: %v", err)
 			}
 		})
+	}
+}
+
+func TestAuthConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		args      []string
+		env, want string
+	}{
+		{"cli", []string{"--auth-key=cli-secret"}, "", "cli-secret"},
+		{"environment", nil, "env-secret", "env-secret"},
+		{"precedence", []string{"--auth-key", "cli-secret"}, "env-secret", "cli-secret"},
+		{"interactive", nil, "", ""},
+		{"explicit empty", []string{"--auth-key="}, "env-secret", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			cfg, err := parseConfig(tc.args, func(k string) string {
+				if k == "TS_AUTHKEY" {
+					return tc.env
+				}
+				return ""
+			}, &out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.authKey != tc.want {
+				t.Fatal("incorrect authentication precedence")
+			}
+			if out.Len() != 0 {
+				t.Fatal("parser printed configuration")
+			}
+			t.Setenv("TS_AUTHKEY", tc.env)
+			if err := prepareAuth(cfg.authKey); err != nil {
+				t.Fatal(err)
+			}
+			if cfg.authKey == "" && os.Getenv("TS_AUTHKEY") != "" {
+				t.Fatal("tsnet would reuse overridden environment key")
+			}
+		})
+	}
+}
+
+func TestAuthKeyDiagnostics(t *testing.T) {
+	for _, args := range [][]string{
+		{"--auth-key=cli-secret", "--help"}, {"--auth-key", "cli-secret", "-h"},
+		{"--auth-key=cli-secret", "--cli-secret"},
+		{"--cli-secret", "--auth-key=cli-secret"},
+		{"---bad=cli-secret", "--auth-key", "cli-secret"},
+		{"--auth-key=cli-secret", "--port=bad"},
+		{"--auth-key"},
+	} {
+		var out bytes.Buffer
+		_, err := parseConfig(args, func(k string) string {
+			if k == "TS_AUTHKEY" {
+				return "env-secret"
+			}
+			return ""
+		}, &out)
+		if err == nil {
+			t.Fatal("expected help or validation error")
+		}
+		message := err.Error() + out.String()
+		for _, secret := range []string{"cli-secret", "env-secret"} {
+			if strings.Contains(message, secret) {
+				t.Fatal("auth key leaked in diagnostic")
+			}
+		}
+	}
+	if got := redactSecrets("bad cli-secret and env-secret", "cli-secret", "env-secret"); strings.Contains(got, "secret") {
+		t.Fatal("log redaction failed")
 	}
 }

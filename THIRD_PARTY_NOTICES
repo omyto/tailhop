@@ -1,6 +1,57 @@
 THIRD-PARTY SOFTWARE NOTICES
 
-The following copyright notices and license terms apply to bundled software.
+This file preserves copyright notices and license terms for third-party
+software bundled with Tailhop. Copyright notices are grouped with their
+applicable license text below; similar-looking license variants are kept
+separate when their terms differ.
+
+NOTICE GUIDE
+============
+
+Go runtime and Go modules (a module may include code under multiple terms):
+
+  BSD terms (Google LLC)
+    Go standard library; golang.org/x/{crypto,exp,net,oauth2,sync,sys,term,text,time}
+  BSD terms (Google Inc.)
+    filippo.io/edwards25519; github.com/go-json-experiment/json;
+    github.com/hdevalence/ed25519consensus; github.com/klauspost/compress;
+    github.com/tailscale/hujson
+  BSD terms (Tailscale)
+    tailscale.com; github.com/tailscale/{peercred,web-client-prebuilt}
+  BSD terms (Inet.af)
+    go4.org/netipx
+  BSD terms (fiat-crypto)
+    Crypto code included in Go and filippo.io/edwards25519
+  BSD terms (Michael J. Fromberger)
+    github.com/creachadair/msync
+  BSD terms (D-Bus)
+    github.com/godbus/dbus/v5
+  BSD terms (goupnp)
+    github.com/huin/goupnp
+  ISC terms (Coder)
+    github.com/coder/websocket
+  MIT terms
+    github.com/fxamacker/cbor/v2; github.com/gaissmai/bart;
+    github.com/jsimonetti/rtnetlink; github.com/mdlayher/{netlink,socket};
+    github.com/mitchellh/go-ps; github.com/tailscale/wireguard-go;
+    github.com/x448/float16; bundled web-client JavaScript
+  Apache-2.0 terms
+    github.com/golang/groupcache; github.com/google/btree;
+    github.com/pires/go-proxyproto; github.com/safchain/ethtool;
+    go4.org/mem; gvisor.dev/gvisor
+  Microsoft permission notice
+    Bundled web-client tslib
+  Sun Microsystems permission notices; Cephes notice
+    Mathematical code included in the Go runtime
+  Inter font — SIL Open Font License 1.1
+    Inter font embedded with the Tailscale web client
+
+Some Go dependencies also include separately licensed embedded code; this
+guide identifies the main notice groups, not an exhaustive component inventory.
+Required texts and copyright statements are reproduced below.
+
+LICENSE TERMS AND COPYRIGHT NOTICES
+===================================
 
 BSD terms (Google LLC)
 ----------------------

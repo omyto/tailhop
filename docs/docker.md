@@ -13,6 +13,29 @@ Tailhop does not parse `.env` itself. Environment-only configuration remains
 supported; the image and both Compose files set `TS_STATE_DIR=/var/lib/tailhop`,
 so native XDG/home defaults do not change container identity or persistence.
 
+## Image tags
+
+Use versioned tags for predictable deployments: a version selects a specific
+release. `latest` is a moving tag tracking the newest stable SemVer release,
+convenient for testing and quick installation. Prerelease tags (`alpha`, `beta`,
+`rc`) are rejected by the release workflow and never update `latest`.
+
+```bash
+docker pull omyto/tailhop:latest
+docker pull omyto/tailhop:0.2.0
+```
+
+`0.2.0` illustrates a versioned tag; choose a version published on Docker Hub.
+Both tags for the promoted release reference the same multi-platform image
+(`linux/amd64` and `linux/arm64`). Older release reruns still publish their
+versioned image but cannot downgrade `latest`.
+
+Compose still requires an explicit `TAILHOP_VERSION`. Prefer a published version
+for normal deployments; set `TAILHOP_VERSION=latest` in `.env` to opt into the
+moving tag. Updating `latest` on Docker Hub does **not** update running containers.
+Pull and recreate explicitly using the [upgrade commands below](#deploy-a-prebuilt-image),
+keeping the same project and persistent state volume.
+
 ## Deploy a prebuilt image
 
 Obtain `compose.release.yaml` and `.env.example` from the maintainer and put them
@@ -28,7 +51,8 @@ Edit `.env`: set the blank `TAILHOP_VERSION` to a published tag selected from
 [Docker Hub](https://hub.docker.com/r/omyto/tailhop), and replace the `TS_AUTHKEY`
 placeholder with your own Tailscale enrollment Auth Key (not an API access token).
 The publishing workflow uses version tags without the Git tag's leading `v`.
-Do not leave `TAILHOP_VERSION` empty or assume a `latest` tag exists.
+Do not leave `TAILHOP_VERSION` empty. Use a versioned tag for predictable
+deployments, or explicitly select `latest` as described above.
 
 Compose pulls `omyto/tailhop:<selected-version>`; no Docker Hub username setting
 is needed. `TAILHOP_VERSION` selects the image and is not an application setting.
@@ -51,7 +75,9 @@ container to clear its running environment:
 docker compose -f compose.release.yaml up -d --force-recreate
 ```
 
-To upgrade, change `TAILHOP_VERSION` in `.env` to another published version, then run:
+To upgrade, change `TAILHOP_VERSION` in `.env` to another published version, then
+pull and recreate. If explicitly using `latest`, keep that value and run the same
+commands to fetch the newly promoted image:
 
 ```sh
 docker compose -f compose.release.yaml pull
@@ -155,9 +181,10 @@ The enrollment, security, and persistence guidance above also applies here.
 2. In GitHub repository Settings → Secrets and variables → Actions, set repository variable `DOCKERHUB_USERNAME` to `omyto` (publisher-side configuration, not an end-user `.env` setting) and repository secret `DOCKERHUB_TOKEN` to a Docker Hub access token with the read/write access needed to push. Never commit the token or pass it as a build argument. No Tailscale Auth Key is needed by CI or image builds.
 3. Enable GitHub Actions for the private repository and allow the pinned official GitHub/Docker actions. Review runner/billing availability, limit who may push version tags, and run the branch CI before release. Keep action SHA pins updated deliberately.
 4. Commit and review release changes through the normal repository process. Publish only a new stable version tag containing the intended changes. Never move, repush, or recreate an already published tag.
-5. Watch the [publishing workflow](../.github/workflows/docker-publish.yml). It validates stable `vMAJOR.MINOR.PATCH` tags, rejects leading zeros/prereleases/build metadata, and runs formatting, vet, unit tests, and race tests before the publish job. Ordinary branch pushes and pull requests cannot publish. A Git tag such as `v0.1.0` produces only `omyto/tailhop:0.1.0`, without `latest`, aliases, or an automatic GitHub Release.
+5. Watch the [publishing workflow](../.github/workflows/docker-publish.yml). It validates stable `vMAJOR.MINOR.PATCH` tags, rejects leading zeros/prereleases/build metadata, and runs formatting, vet, unit tests, and race tests before the publish job. Ordinary branch pushes and pull requests cannot publish. A Git tag such as `v0.1.0` publishes `omyto/tailhop:0.1.0`. A queued, serialized promotion job compares stable versions against the existing `latest` index, then copies the exact build digest to `omyto/tailhop:latest` only if it would not downgrade it. The versioned tag and promoted `latest` are verified to have the same digest and both supported platforms. Registry or missing-version-metadata errors fail promotion instead of bypassing the check; a failed promotion can be retried by rerunning the workflow. No automatic GitHub Release is created.
 6. Check the resulting Docker Hub tag and its `linux/amd64` and `linux/arm64` manifest entries. With the published version set as `TAILHOP_VERSION` in `.env`, pull and start using the prebuilt commands above. On each target architecture, verify non-root startup, first-run state permissions, HTTP/HTTPS forwarding, ACL enforcement, identity after a keyless restart, and clean shutdown. Use the [manual checks](#manual-verification); multi-platform runtime validation remains manual.
 
-The workflow sets only application version/license OCI labels. It uses a local checked-out build context, disables Git labels/information, provenance and SBOM attestations, and build-record artifact uploads to avoid publishing private repository/build metadata. See [Docker's attestation documentation](https://docs.docker.com/build/ci/github-actions/attestations/) for the default behavior. Review image configuration/history and manifest metadata before announcing the release. Private Actions logs remain subject to GitHub repository access controls.
+The workflow sets application version/license OCI labels and a version annotation
+on the multi-platform image index for promotion checks. It uses a local checked-out build context, disables Git labels/information, provenance and SBOM attestations, and build-record artifact uploads to avoid publishing private repository/build metadata. See [Docker's attestation documentation](https://docs.docker.com/build/ci/github-actions/attestations/) for the default behavior. Review image configuration/history and manifest metadata before announcing the release. Private Actions logs remain subject to GitHub repository access controls.
 
 The build context allows only the current Go packages, module files, and Dockerfile. Add new build packages/assets explicitly to `.dockerignore`; do not include environments, credentials, or tsnet state. Keeping the source repository private does not make the distributed binary private: anyone can pull and inspect the public image and binary, including Go dependency/build information.

@@ -56,6 +56,8 @@ mise exec -- go build -trimpath -o tailhop ./cmd/tailhop
 
 Continue with the same service installation below.
 
+Already running the binary directly? Follow [Migrate from direct execution to systemd](../INSTALL.md#migrate-from-direct-execution-to-systemd) to preserve the existing node identity without a new enrollment key.
+
 ## Install the service
 
 Run the administration commands below manually on the target Linux host. Both installation methods provide `./tailhop` and use the same packaging paths.

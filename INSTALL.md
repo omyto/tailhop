@@ -146,6 +146,142 @@ The service runs unprivileged, logs to journald, and uses SIGTERM with a
 Switching from direct execution or Docker does not automatically migrate that
 installation's tsnet identity; the systemd state directory is separate.
 
+## Migrate from direct execution to systemd
+
+Tailscale node identity lives in the persisted tsnet state directory. Copying
+valid enrolled state lets the packaged service reuse the same node and Tailnet
+IP without a new `TS_AUTHKEY`. Direct execution normally uses absolute
+`$XDG_STATE_HOME/tailhop`, otherwise `~/.local/state/tailhop` (including when XDG
+is unset or relative). The service always uses `/var/lib/tailhop`.
+
+First record the existing device identity and Tailnet IP in the Tailscale admin
+console, plus the hostname, port, and other settings used by the direct process.
+Prepare the dedicated account, binary, and unit using
+[Install as a systemd service](#install-as-a-systemd-service), but **do not run
+`enable --now` or start the service yet**. Skip enrollment-key setup when reusing
+state. If you copied the example environment file, remove its `TS_AUTHKEY`
+assignment with `sudoedit`; do not overwrite an existing environment file.
+
+Stop the direct process with Ctrl-C, or `kill -TERM <pid>` using its known PID.
+Wait for it to exit fully, including the ten-second proxy drain and tsnet cleanup;
+verify that PID is gone before copying. Disable any launcher that would restart
+it. Never run both copies concurrently, even from different directories: they
+represent the same Tailscale identity.
+
+In Bash, as the original runtime user, identify the actual source. The following
+suggestion uses **this shell's** environment; check the original invocation:
+`--state-dir` wins over `TS_STATE_DIR`, then XDG/home defaults. Enter the absolute
+path if an override was used. Resolve a relative override against the original process's
+working directory, not this shell's. Do not dump the process environment or state
+files, which may contain credentials.
+
+```bash
+if [ -n "${TS_STATE_DIR:-}" ]; then
+  suggested_state=$TS_STATE_DIR
+elif [[ ${XDG_STATE_HOME:-} = /* ]]; then
+  suggested_state=${XDG_STATE_HOME%/}/tailhop
+else
+  suggested_state=$HOME/.local/state/tailhop
+fi
+read -r -p "Actual original state directory [$suggested_state]: " source_state
+source_state=${source_state:-$suggested_state}
+```
+
+With both instances stopped, copy the complete contents, including hidden files.
+Run this block only after confirming the direct process has exited. It stops the
+service too, rejects an existing destination identity, and leaves the source
+unchanged. Do not start either instance or run another migration during the copy.
+
+```bash
+sudo systemctl stop tailhop
+sudo bash -s -- "$source_state" <<'MIGRATE'
+set -euo pipefail
+source_state=$(realpath -e -- "$1")
+destination=/var/lib/tailhop
+fail() { printf '%s\n' "$1" >&2; exit 1; }
+[ "$(systemctl show -p ActiveState --value tailhop)" = inactive ] ||
+  fail 'Service is not inactive; stop and investigate.'
+[ -d "$source_state" ] || fail 'Source is not a directory.'
+[ -n "$(find "$source_state" -mindepth 1 -printf x -quit)" ] ||
+  fail 'Source is empty; locate the enrolled state before continuing.'
+[ "$source_state" != "$destination" ] ||
+  fail 'Source already uses the service path; do not copy it onto itself.'
+[ "$source_state" != / ] || fail 'Source must be a dedicated state directory.'
+case "$destination" in
+  "$source_state"/*) fail 'Destination is inside the source; review manually.' ;;
+esac
+# Normal tsnet state contains regular files and directories. Review anything else.
+[ -z "$(find "$source_state" -mindepth 1 ! -type d ! -type f -printf x -quit)" ] ||
+  fail 'Source contains symlinks or special files; review manually before copying.'
+[ ! -L "$destination" ] || fail 'Destination is a symlink; review manually.'
+if [ -e "$destination" ]; then
+  [ -d "$destination" ] || fail 'Destination is not a directory.'
+  [ -z "$(find "$destination" -mindepth 1 -printf x -quit)" ] ||
+    fail 'Destination contains data; aborting without merging or overwriting it.'
+fi
+install -d -o tailhop -g tailhop -m 0700 "$destination"
+cp -a --no-clobber -- "$source_state/." "$destination/"
+chown -R tailhop:tailhop "$destination"
+find "$destination" -type d -exec chmod 0700 {} +
+find "$destination" -type f -exec chmod 0600 {} +
+MIGRATE
+```
+
+**Continue only if the entire block succeeds.** If it fails, do not start the
+service with a partial copy; investigate without deleting either identity. If
+`/var/lib/tailhop` already contains data, establish which node it belongs to and
+back it up separately before any manual resolution. These commands deliberately
+abort rather than merge identities. They assume ordinary local Linux directories
+and no concurrent writers. If the source is already `/var/lib/tailhop`, no copy
+is needed; arrange a separate private backup and verify service ownership before
+reusing it. Retain the original private state as a credential-bearing rollback
+backup until migration is verified. Never move it or symlink the service path
+into your home: `ProtectHome=true` blocks home access, while `StateDirectory`
+keeps `/var/lib/tailhop` writable under `ProtectSystem=strict`.
+
+If the old invocation used a custom `--hostname` or `TS_HOSTNAME`, preserve that
+value as `TS_HOSTNAME` in `/etc/tailhop/tailhop.env`; also transfer any port or
+other non-default settings to their environment equivalents. Use the root-owned
+0600 file described above, with literal `KEY=value` assignments. The file may
+remain absent when defaults suffice and valid enrolled state is present. A new
+login or key may be needed if state is missing, invalid, revoked, or requires
+reauthentication; generating a new key is not part of normal migration.
+
+```bash
+sudo systemctl enable --now tailhop
+systemctl status tailhop
+sudo journalctl -u tailhop -n 50 --no-pager
+```
+
+Confirm the **same device identity and Tailnet IP** in the Tailscale admin console,
+not merely a matching hostname or active service status. From an authorized
+Tailnet client, substitute the preserved DNS name/IP and configured port:
+
+```sh
+curl --noproxy "" --proxy http://tailhop:8080 http://example.com/
+curl --noproxy "" --proxy http://tailhop:8080 https://ifconfig.me/ip
+```
+
+Keep journal output private; an enrollment URL can be a secret. An unexpected new
+node or login prompt means migration needs investigation before retiring backups.
+
+To roll back, stop and disable the service to prevent a later boot from starting
+a duplicate. Verify it is inactive, then restart directly as the original user
+with the preserved source path and original hostname/other flags:
+
+```bash
+sudo systemctl disable --now tailhop
+# In the original user's shell, with source_state still set to the source path:
+if [ "$(systemctl show -p ActiveState --value tailhop)" = inactive ]; then
+  unset TS_AUTHKEY
+  ./tailhop --state-dir "${source_state:?Set the original state path first}"  # Add original flags.
+else
+  printf '%s\n' 'Service has not stopped; do not start another instance.' >&2
+fi
+```
+
+Do not run the service and direct process simultaneously with this identity.
+
 ## Verify connectivity
 
 From an authorized, connected Tailnet client:

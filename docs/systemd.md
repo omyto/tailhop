@@ -77,42 +77,38 @@ sudo install -o root -g root -m 0644 packaging/systemd/tailhop.service /etc/syst
 sudo systemctl daemon-reload
 ```
 
-### Optional enrollment and overrides
-
-For first-time key enrollment, follow the self-contained
-[optional enrollment instructions](../INSTALL.md#optional-initial-enrollment-and-configuration)
-to create `/etc/tailhop/tailhop.env` only when needed, without overwriting an
-existing file. Keep it root:root, mode 0600, inside root-owned `/etc/tailhop`
-(mode 0700). Replace the example placeholder with an appropriate enrollment Auth
-Key, not an API access token. Use systemd `KEY=value` syntax, without `export`
-or shell/Compose expansion; Tailhop does not parse this file or `.env` itself.
-
-The optional file can also set `TS_HOSTNAME`, `PROXY_PORT`, `LOG_LEVEL`,
-`MAX_CLIENTS`, and `IDLE_TIMEOUT`. For overrides only, omit `TS_AUTHKEY`.
-The unit fixes `ExecStart=/usr/local/bin/tailhop --state-dir=/var/lib/tailhop`;
-CLI precedence prevents `TS_STATE_DIR` from changing that path. See the
-[configuration table](configuration.md) for defaults and accepted values.
-
-After successful enrollment, remove `TS_AUTHKEY` with `sudoedit` and restart
-the service to clear it from the running environment. Valid persisted state
-normally needs no new key. systemd reads the root-only environment file before
-switching to `User=tailhop` / `Group=tailhop`; root and processes under that UID
-may still inspect the environment. Avoid dumping it, and protect interactive
-enrollment URLs in the journal as secrets.
-
-### Start with enrolled state
-
-With valid state in `/var/lib/tailhop` readable and writable by the service user,
-and no required configuration overrides, start without creating an environment
-file. `EnvironmentFile=-/etc/tailhop/tailhop.env` makes the file optional; defaults
-suffice unless your deployment needs overrides. For a new node, arrange enrollment
-as above before starting; without a key, tsnet may offer interactive login.
+### Start and enroll
 
 ```sh
 sudo systemctl enable --now tailhop
 systemctl status tailhop
 sudo journalctl -u tailhop -f
 ```
+
+For a new node, open the logged URL in a browser, complete login, and approve the
+node if required by Tailnet policy. tsnet supports this interactive flow without
+a key. Protect the URL as a secret. Existing valid state is reused without a new
+key, provided the service user can read and write `/var/lib/tailhop`.
+No environment file is needed for normal startup or enrollment.
+
+### Optional configuration and automation
+
+Use a `systemctl edit tailhop` drop-in for persistent non-secret CLI flags; see the
+self-contained [configuration example](../INSTALL.md#optional-initial-enrollment-and-configuration).
+Keep `--state-dir=/var/lib/tailhop` and the packaged hardening. Never place a key
+in permanent `ExecStart` arguments. For direct execution, the optional `--auth-key`
+flag is available, with the [documented exposure risks](configuration.md).
+
+The unit retains `EnvironmentFile=-/etc/tailhop/tailhop.env` for backward
+compatibility and automation. Only create it when needed, following the same
+[optional setup](../INSTALL.md#optional-initial-enrollment-and-configuration), which
+preserves existing files. Use root:root, mode 0600, in `/etc/tailhop` (0700).
+Use literal `KEY=value` assignments without `export` or shell expansion.
+`TS_HOSTNAME`, `PROXY_PORT`, `LOG_LEVEL`, `MAX_CLIENTS`, `IDLE_TIMEOUT`, and optional
+`TS_AUTHKEY` remain supported; CLI flags win, including the unit's state path.
+After key enrollment remove `TS_AUTHKEY` and restart to clear the environment.
+Environment variables are inspectable by root and processes using the service UID.
+Tailhop itself loads no configuration files. No state is migrated or deleted.
 
 `StateDirectory=tailhop` creates and owns /var/lib/tailhop for the service, with mode 0700. It persists across stops, restarts, and binary updates. Replacing the executable must not delete or replace this Tailscale identity. Switching from Docker to systemd does not automatically migrate the container’s tsnet state. Do not put state in /tmp. The unit runs without root, TUN, capabilities, a separate tailscaled daemon, firewall changes, or a public proxy listener. NoNewPrivileges, a private umask, read-only system paths and inaccessible home directories restrict writes; a private writable temporary directory supports temporary files while persistent state remains writable through StateDirectory.
 

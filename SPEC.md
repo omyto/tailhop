@@ -72,7 +72,7 @@ The scope is public-internet egress only. Do not introduce a private-subnet allo
 
 ## 5. Configuration
 
-Use standard Go flags with precedence CLI flags > non-empty environment variables > defaults. Keep TS_AUTHKEY environment-only; do not parse configuration files or dotenv. Validate configuration early; report useful errors without exposing secrets. Help must exit without startup side effects. See [configuration reference](docs/configuration.md) for flags and accepted values.
+Use standard Go flags with precedence CLI flags > non-empty environment variables > defaults. Support optional --auth-key with TS_AUTHKEY fallback; do not parse configuration files or dotenv. Validate configuration early; report useful errors without exposing secrets. Help must exit without startup side effects. See [configuration reference](docs/configuration.md) for flags and accepted values.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -131,10 +131,10 @@ Add at most one small extra internal Go file if it materially improves clarity. 
 
 - Multi-stage Dockerfile: build Go binary in a Go image; run with minimal runtime containing suitable CA roots as required by tsnet networking.
 - Run as **non-root**. State mount target `/var/lib/tailhop` must be writeable by the runtime UID. If using a named volume, include reliable first-run permissions handling without starting the app as root; explain host bind-mount ownership requirements.
-- Compose example must use a persistent named volume for state, set `TS_STATE_DIR`, and pass `TS_AUTHKEY` through the environment (recommend `.env` local file; never hardcode a key).
+- Compose examples must use a persistent named volume at the image's `/var/lib/tailhop` state path and work with no environment file or key. Release Compose defaults to `omyto/tailhop:latest`; development Compose builds locally. Optional settings use CLI `command`; explicit environment mappings remain supported.
 - Do not include `ports:`, `network_mode: host`, `privileged: true`, `cap_add`, or `/dev/net/tun`.
 - Validate Compose with `docker compose config --quiet` to avoid printing TS_AUTHKEY.
-- Support clean `docker compose down` / SIGTERM. Provide `.env.example` with placeholders (not real secrets) and `.dockerignore`.
+- Support clean `docker compose down` / SIGTERM. Keep `.dockerignore`; do not require a dotenv file or loader.
 - Document expected default Docker bridge NAT behavior and caveats about the observed public egress IP.
 
 ### Native Linux systemd alternative

@@ -46,41 +46,46 @@ node's Tailnet IP. Grants/ACLs must allow TCP 8080 (or your configured port).
 The response shows the host/container's actual public egress IP, including any
 NAT, VPN, or routing policy. Add `--noproxy ""` if `NO_PROXY` would bypass it.
 
-### Automated enrollment and configuration
+### Optional one-time key enrollment
 
-For automated first-time enrollment, supply a Tailscale Auth Key appropriate for
-your device approval/tag policy, not an API access token. In Bash, use this
-**instead of** the interactive start command for a new container:
+Interactive login is the default. If a key is useful for initial enrollment or
+reauthentication, use a temporary container with the **same persistent volume**.
+Stop any existing Tailhop container first; never run two instances with the same
+node state. Replace the placeholder with a Tailscale Auth Key appropriate for
+your Tailnet's approval/tag policy, not an API access token:
 
 ```bash
-read -r -s -p 'Tailscale Auth Key: ' TS_AUTHKEY
-printf '\n'
-export TS_AUTHKEY
-docker run -d \
-  --name tailhop \
-  --restart unless-stopped \
+docker run --rm -it \
+  --name tailhop-enroll \
   --stop-timeout 20 \
   --cap-drop ALL \
   --security-opt no-new-privileges \
-  -e TS_AUTHKEY \
   -v tailhop-state:/var/lib/tailhop \
-  omyto/tailhop:latest
-unset TS_AUTHKEY
+  omyto/tailhop:latest \
+  --auth-key '<AUTH_KEY>'
 ```
 
-The prompt avoids literal keys in command history, and `-e TS_AUTHKEY` copies the
-exported value without putting it in the command arguments. Users with Docker
-daemon access can inspect environment variables stored in container metadata;
-unsetting the shell variable does not clear the container's copy. After successful
-enrollment, recreate the container **without** `-e TS_AUTHKEY`, keeping the same
-volume, using the [update sequence](#updates). Restarting alone retains its environment.
+**A literal CLI key may appear in shell history, process listings, and Docker
+container metadata. This flag is not a secret-management mechanism.** Prefer
+browser enrollment for manual setup. For automation, `TS_AUTHKEY` remains supported:
+supply an exported key via `-e TS_AUTHKEY` **before** the image name instead of an
+`--auth-key` argument. Docker daemon users can inspect environment values too.
+Tailhop never writes the raw enrollment key to its own configuration file.
 
-Defaults need no additional variables. Add optional flags **before the image
-name**, such as `-e TS_HOSTNAME=tailhop-home`, `-e PROXY_PORT=8080`,
-`-e LOG_LEVEL=info`, `-e MAX_CLIENTS=200`, or `-e IDLE_TIMEOUT=15m`.
-See the [configuration reference](configuration.md) for accepted values. The
-image already sets `TS_STATE_DIR=/var/lib/tailhop`; keep the volume mounted there.
-Tailhop does not automatically load `.env` files.
+Confirm enrollment in the Tailscale admin console, then press Ctrl-C and wait for
+graceful exit. `--rm` removes the temporary container but retains the named volume.
+Start normally with the command at the top, without a key. Subsequent starts reuse
+valid state. If authentication requirements change, reauthentication may be needed.
+
+### Optional configuration
+
+Defaults need no configuration. Append CLI flags **after the image name**, for
+example `--hostname=tailhop-home --max-clients=200 --idle-timeout=15m`.
+The exec-form image ENTRYPOINT forwards these arguments directly to Tailhop.
+CLI flags override non-empty environment variables, then defaults. Legacy variables
+remain usable with `-e NAME=value` before the image name; no dotenv file is required.
+See the [configuration reference](configuration.md) for all settings. The image
+already sets `TS_STATE_DIR=/var/lib/tailhop`; keep the state volume mounted there.
 
 ### Container lifecycle
 
@@ -122,8 +127,8 @@ docker run -d \
   omyto/tailhop:latest
 ```
 
-Repeat any custom environment flags before the image name; omit `TS_AUTHKEY` when
-valid enrolled state exists. For versioned deployments, use the chosen version
+Repeat custom CLI flags after the image name (or legacy environment flags before
+it). Omit `--auth-key` and `TS_AUTHKEY` when valid enrolled state exists. For versioned deployments, use the chosen version
 in both the pull and run commands. Confirm the same Tailscale device identity
 and Tailnet IP, then repeat the proxy check. Do not run two containers using the
 same identity at once, even if you copy its state to another volume.
@@ -163,28 +168,31 @@ container before starting the other; never share active node state concurrently.
 For a separate node, choose a different volume name and hostname.
 
 For predictable production deployments, replace `latest` in `image:` with an
-explicit published version. Optional application overrides go under the service,
-for example:
+explicit published version. Optional customizations use service `command`:
 
 ```yaml
-    environment:
-      TS_HOSTNAME: tailhop-home
-      MAX_CLIENTS: "200"
-      IDLE_TIMEOUT: 15m
+    command:
+      - --hostname=tailhop-home
+      - --max-clients=200
+      - --idle-timeout=15m
 ```
 
-For auth-key enrollment, add `TS_AUTHKEY: ${TS_AUTHKEY:?Export TS_AUTHKEY for initial enrollment}`
-to that `environment:` mapping. Read and export the key with the silent Bash prompt
-above, run `docker compose up -d`, then `unset TS_AUTHKEY`. After enrollment,
-remove the `TS_AUTHKEY` entry from the Compose file and recreate the container:
+The image ENTRYPOINT remains Tailhop. Interactive enrollment still works with
+these settings. For optional one-time key enrollment, stop the service first,
+then run a temporary instance on the service's state volume:
 
-```sh
-docker compose up -d --force-recreate
+```bash
+docker compose stop tailhop
+docker compose run --rm --no-deps tailhop --auth-key '<AUTH_KEY>'
 ```
 
-Compose interpolation supplies process environment variables; it is not a Tailhop
-configuration parser. Use `config --quiet` rather than printing resolved keys.
-Docker daemon access can expose secrets in container metadata, just as with Docker Run.
+Apply the CLI-key exposure warning above. Complete enrollment, press Ctrl-C,
+wait for the temporary container to exit, and run `docker compose up -d` without
+a key. Do not put a key in permanent Compose `command` arguments. Environment
+variables remain available through an explicit service `environment` mapping
+for automation or legacy settings; Docker can expose these values in metadata.
+If an existing setup passes `TS_AUTHKEY`, remove it after enrollment and run
+`docker compose up -d --force-recreate` to clear the running environment.
 
 For upgrades, change the image version if pinned, then:
 
@@ -200,13 +208,8 @@ the service.
 
 ### Repository release Compose file
 
-For users already working with repository deployment files,
-[compose.release.yaml](../compose.release.yaml) remains supported. It requires an
-explicit `TAILHOP_VERSION`; the development [compose.yaml](../compose.yaml) builds
-source instead. In a fresh repository deployment, copy `.env.example` to `.env`,
-protect it with `chmod 600 .env`, and select a published version (or explicitly
-`latest`). Remove the example auth-key placeholder for interactive enrollment,
-or replace it securely for key enrollment. Do not overwrite existing configuration.
+The repository's [compose.release.yaml](../compose.release.yaml) also defaults to
+`omyto/tailhop:latest`, with no `.env`, auth key, or version variable required:
 
 ```sh
 docker compose -f compose.release.yaml config --quiet
@@ -214,12 +217,17 @@ docker compose -f compose.release.yaml pull
 docker compose -f compose.release.yaml up -d
 ```
 
-Use `-f compose.release.yaml` consistently for logs, lifecycle commands, and
-upgrades. After key enrollment, remove `TS_AUTHKEY` from `.env` and unset any shell
-export, then run `docker compose -f compose.release.yaml up -d --force-recreate`.
-For upgrades, change `TAILHOP_VERSION` if pinned, pull, and recreate. This file uses
-a project-scoped `state` volume; keep the same project/deployment directory and
-volume. It does not automatically reuse the Quick Start's `tailhop-state` volume.
+Use `-f compose.release.yaml` consistently for lifecycle commands and upgrades.
+Pin a version by editing `image:`; add `command` flags for optional settings.
+This file retains its original project-scoped `state` volume: keep the same
+project/deployment directory and volume across updates. It does not automatically
+reuse the Quick Start's `tailhop-state` volume or migrate existing state.
+
+Previous `.env` users must transfer needed customizations to CLI `command` or an
+explicit `environment` mapping: Compose does not forward host variables to a
+container automatically. Environment-based application configuration still works;
+only the default interpolation has been removed. Existing user `.env` files are
+not deleted automatically, but are no longer needed or referenced by these files.
 
 ## Image tags
 
@@ -296,11 +304,10 @@ docker compose -f compose.yaml logs -f tailhop
 ```
 
 The repository's development `compose.yaml` builds the Dockerfile; it is distinct
-from the self-contained deployment example above. It passes application variables
-from the shell or optional Compose `.env` interpolation. For interactive login,
-leave `TS_AUTHKEY` unset; do not copy an auth-key placeholder into the environment.
-`TAILHOP_VERSION` is not used here. Remove a supplied key after enrollment and
-recreate with `docker compose -f compose.yaml up -d --force-recreate`.
+from the self-contained deployment example above. It needs no `.env` and uses
+interactive enrollment by default. Add service `command` flags for optional settings,
+or an explicit `environment` mapping for automation. Remove any supplied key after
+enrollment and recreate with `docker compose -f compose.yaml up -d --force-recreate`.
 Keep the same project-scoped state volume across builds.
 
 Run source tests with the toolchain required by `go.mod`:
@@ -319,7 +326,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for formatting, vet, and test requirem
 3. Enable GitHub Actions for the private repository and allow the pinned official GitHub/Docker actions. Review runner/billing availability, limit who may push version tags, and run the branch CI before release. Keep action SHA pins updated deliberately.
 4. Commit and review release changes through the normal repository process. Publish only a new stable version tag containing the intended changes. Never move, repush, or recreate an already published tag.
 5. Watch the [publishing workflow](../.github/workflows/docker-publish.yml). It validates stable `vMAJOR.MINOR.PATCH` tags, rejects leading zeros/prereleases/build metadata, and runs formatting, vet, unit tests, and race tests before the publish job. Ordinary branch pushes and pull requests cannot publish. A Git tag such as `v0.1.0` publishes `omyto/tailhop:0.1.0`. The same multi-platform build/push also updates `omyto/tailhop:latest`, following the publication-order behavior described under [image tags](#image-tags). No automatic GitHub Release is created.
-6. Check the resulting Docker Hub tag and its `linux/amd64` and `linux/arm64` manifest entries. With the published version set as `TAILHOP_VERSION` in `.env`, pull and start using the prebuilt commands above. On each target architecture, verify non-root startup, first-run state permissions, HTTP/HTTPS forwarding, ACL enforcement, identity after a keyless restart, and clean shutdown. Use the [manual checks](#manual-verification); multi-platform runtime validation remains manual.
+6. Check the resulting Docker Hub tag and its `linux/amd64` and `linux/arm64` manifest entries. Select the published version in the image reference, then pull and start using the prebuilt commands above. On each target architecture, verify non-root startup, first-run state permissions, HTTP/HTTPS forwarding, ACL enforcement, identity after a keyless restart, and clean shutdown. Use the [manual checks](#manual-verification); multi-platform runtime validation remains manual.
 
 The workflow sets application version/license OCI labels. It uses a local checked-out build context, disables Git labels/information, provenance and SBOM attestations, and build-record artifact uploads to avoid publishing private repository/build metadata. See [Docker's attestation documentation](https://docs.docker.com/build/ci/github-actions/attestations/) for the default behavior. Review image configuration/history and manifest metadata before announcing the release. Private Actions logs remain subject to GitHub repository access controls.
 

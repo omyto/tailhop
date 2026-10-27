@@ -19,7 +19,15 @@ Unknown flags, positional arguments, and invalid configuration fail with a non-z
 | `--log-level` | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
 | `--max-clients` | `MAX_CLIENTS` | `100` | Positive integer; global inbound TCP connection limit. |
 | `--idle-timeout` | `IDLE_TIMEOUT` | `10m` | Positive Go duration such as `30s`, `10m`, `2h`. |
-| None | `TS_AUTHKEY` | unset | Initial enrollment key; omit with valid enrolled state. Never pass as a CLI argument. |
+| `--auth-key` | `TS_AUTHKEY` | empty | Optional initial enrollment/reauthentication key; interactive login if no key or enrolled state exists. |
+
+No configuration file is required. CLI flags are recommended for direct execution;
+environment variables remain supported for automation and backward compatibility.
+`--auth-key=` explicitly overrides `TS_AUTHKEY` with an empty value. Without a key,
+tsnet starts interactive login when necessary; valid persisted state needs no new key.
+Never put an auth key in a permanent service command. CLI keys can appear in shell
+history, process listings and Docker metadata; the flag is not secret management.
+Environment variables can also be inspected by privileged operators.
 
 For direct execution, use flags:
 
@@ -41,23 +49,21 @@ from the old `/var/lib/tailhop` default must keep that path explicitly**, with
 A new path may create a new Tailscale node. Restart using the same state directory
 without TS_AUTHKEY after enrollment; see [INSTALL.md](../INSTALL.md).
 
-The [Docker guide](docker.md) starts with `docker run` and offers a self-contained
-Compose example; neither needs a repository checkout or `.env` file. For repository
-users, `compose.release.yaml` still requires an explicit `TAILHOP_VERSION` from
-Compose's `.env` or shell environment. That value selects the image, is not read
-by Tailhop, and has no fallback. Prefer a versioned tag for predictable deployments;
-`latest` follows the most recently published stable image (see [image tags](docker.md#image-tags)).
-The repository's development `compose.yaml` builds local source. All methods
-support the same application environment variables.
-Docker sets `TS_STATE_DIR=/var/lib/tailhop` and persists it in a volume. The
-packaged systemd unit fixes `--state-dir=/var/lib/tailhop`, so an environment
-variable cannot override it; `StateDirectory=tailhop` manages ownership.
+The [Docker guide](docker.md) starts with `docker run`. Both repository Compose
+files also work without `.env`: `compose.release.yaml` uses `omyto/tailhop:latest`,
+while `compose.yaml` builds local source. Pin a version by editing `image:`.
+Use Compose `command` for optional CLI settings, or an explicit `environment`
+mapping for legacy variables. Compose does not automatically forward the host's
+application environment; prior `.env` users must transfer needed settings to
+`command` or `environment`. Existing files are not deleted automatically.
+Docker sets `TS_STATE_DIR=/var/lib/tailhop` in the image and persists that path in
+a volume. The packaged systemd unit fixes `--state-dir=/var/lib/tailhop`, which
+wins over `TS_STATE_DIR`; `StateDirectory=tailhop` manages ownership.
 
-Tailhop does not automatically parse `.env` or any configuration file. Compose's
-`.env` interpolation and systemd's optional `EnvironmentFile` are deployment
-mechanisms that supply environment variables to the process. systemd syntax is
-`KEY=value`, without `export` or shell/Compose expansion. Do not commit environment
-files or state. See [Docker](docker.md) and [systemd](systemd.md).
+Tailhop does not automatically parse `.env` or any application configuration file.
+Compose interpolation and systemd's optional `EnvironmentFile` are deployment
+mechanisms, not application parsers. No file is needed for standard deployments.
+See [Docker](docker.md), [systemd](systemd.md), and [secrets and state](security.md#secrets-and-state).
 
 ## Connection admission
 

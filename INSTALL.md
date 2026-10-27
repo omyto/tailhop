@@ -43,27 +43,26 @@ is absolute, otherwise `$HOME/.local/state/tailhop`. Tailhop creates it privatel
 with mode 0700 and checks writability. Relative or invalid XDG paths fall back to
 the home directory. The working directory never determines the default.
 
-For first-time enrollment using a key, in Bash:
+With no key, run `./tailhop`, open the login URL printed in its logs in a browser,
+and complete Tailscale login. Confirm the node in the Tailscale device view and
+approve it if your Tailnet policy requires that. Keep the login URL private.
+
+For optional one-time key enrollment, replace the placeholder below with an
+appropriate Tailscale Auth Key, not an API access token:
 
 ```bash
-read -r -s -p 'Tailscale Auth Key for initial enrollment: ' TS_AUTHKEY
-printf '\n'
-export TS_AUTHKEY
-./tailhop --hostname tailhop-home --port 8080
-unset TS_AUTHKEY
+./tailhop --auth-key '<AUTH_KEY>'
 ```
 
-The silent prompt avoids putting the key in shell history. Use a Tailscale Auth
-Key appropriate for your Tailnet's device approval/tag policy, not an API access
-token. Confirm enrollment in the Tailscale device view. Environment variables can
-still be inspected by privileged processes and processes with the same UID; do
-not dump the environment. Without a key, an uninitialized node may log an
-interactive enrollment URL; treat that URL as a secret too.
+**CLI keys can appear in shell history and process listings; this flag is not a
+secret-management mechanism.** Prefer interactive login for manual setup.
+`TS_AUTHKEY` remains supported for automation; environment variables can also be
+inspected by privileged processes or processes with the same UID. Do not dump them.
+No configuration file, auth key, or secret prompt is required for normal startup.
 
 Press Ctrl-C (SIGINT) to stop gracefully, or send `kill -TERM <pid>` from another
 terminal. The proxy drains requests/tunnels for up to ten seconds, then closes
-remaining connections. Once the process exits, the example unsets the key.
-Restart with the same flags and state directory:
+remaining connections. Restart with the same non-secret flags and state directory:
 
 ```bash
 unset TS_AUTHKEY
@@ -82,9 +81,10 @@ settings with flags, for example:
 ```
 
 CLI flags take precedence over non-empty environment variables, then defaults.
-`TS_AUTHKEY` is environment-only; there is no auth-key flag. Tailhop does not
-parse `.env` files. The six flags are `--hostname`, `--port`, `--state-dir`,
-`--log-level`, `--max-clients`, and `--idle-timeout`; see `./tailhop --help`
+The optional `--auth-key` flag falls back to `TS_AUTHKEY`; `--auth-key=` overrides
+that environment value with an empty key. Tailhop does not parse `.env` files.
+Other flags are `--hostname`, `--port`, `--state-dir`, `--log-level`,
+`--max-clients`, and `--idle-timeout`; see `./tailhop --help`
 for defaults and accepted values. `-h` also displays help without starting tsnet.
 
 **Upgrading an existing native installation:** the old default was
@@ -115,11 +115,38 @@ Do not delete or replace existing state; installation does not migrate it.
 For direct execution users, follow [the migration guide](#migrate-from-direct-execution-to-systemd)
 before starting the service.
 
+### Start and enroll interactively
+
+```sh
+sudo systemctl enable --now tailhop
+systemctl status tailhop
+sudo journalctl -u tailhop -f
+```
+
+For a new node, open the journal's login URL in a browser and finish Tailscale
+login, including any required device approval. Protect that URL as a secret.
+An already enrolled node reuses valid state in `/var/lib/tailhop` without a key.
+The directory must remain readable and writable by the service user.
+No environment file is required in either case.
+
 ### Optional initial enrollment and configuration
 
-Create `/etc/tailhop/tailhop.env` **only** when supplying an initial `TS_AUTHKEY`
-or overriding defaults. For key-based first-time enrollment, these commands
-preserve any existing file and protect it as root:root with mode 0600:
+For persistent non-secret settings, use `sudo systemctl edit tailhop` to add a
+drop-in. Clear the old `ExecStart` before replacing it, and retain the packaged
+state path and security settings. For example:
+
+```ini
+[Service]
+ExecStart=
+ExecStart=/usr/local/bin/tailhop --state-dir=/var/lib/tailhop --hostname=tailhop-home --max-clients=200
+```
+
+Then run `sudo systemctl daemon-reload` and `sudo systemctl restart tailhop`.
+Do not put authentication keys in permanent `ExecStart` arguments.
+
+The unit retains optional `EnvironmentFile=-/etc/tailhop/tailhop.env` for legacy
+installations and automation. Only if needed, create the root-owned 0600 file
+without overwriting existing configuration:
 
 ```sh
 sudo install -d -o root -g root -m 0700 /etc/tailhop
@@ -129,34 +156,12 @@ sudo chmod 0600 /etc/tailhop/tailhop.env
 sudoedit /etc/tailhop/tailhop.env
 ```
 
-Replace the placeholder with an appropriate Tailscale enrollment Auth Key,
-not an API access token. For configuration overrides only, remove the `TS_AUTHKEY`
-assignment instead. Use systemd `KEY=value` syntax, without `export` or shell/Compose
-expansion. Optional overrides include `TS_HOSTNAME`, `PROXY_PORT`, `LOG_LEVEL`,
-`MAX_CLIENTS`, and `IDLE_TIMEOUT`; `TS_STATE_DIR` cannot override the unit's flag.
-Tailhop does not parse this file or `.env` itself.
-
-Start the service below and confirm enrollment in the Tailscale device view.
-After successful enrollment, remove `TS_AUTHKEY` with `sudoedit` and restart the
-service to clear it from the running environment. Valid persisted state normally
-needs no new key. If no overrides remain, the environment file can remain absent.
-Environment variables are not a secret store; avoid dumping them, and protect any
-interactive enrollment URL in the journal. Without a key, an uninitialized node
-may offer interactive login instead.
-
-### Start and operate
-
-An already enrolled instance can start **without** `/etc/tailhop/tailhop.env`
-when valid state exists in `/var/lib/tailhop`, the service user can read and write
-it, and no required overrides depend on the file. The unit uses
-`EnvironmentFile=-/etc/tailhop/tailhop.env`, so a missing file is allowed. With
-built-in defaults sufficient, skip the optional setup above.
-
-```sh
-sudo systemctl enable --now tailhop
-systemctl status tailhop
-sudo journalctl -u tailhop -f
-```
+Use literal systemd `KEY=value` syntax without `export` or shell/Compose expansion.
+An optional `TS_AUTHKEY` can enroll a new node automatically. Remove that assignment
+after enrollment and restart to clear the running environment; valid state normally
+needs no further key. Non-secret environment overrides remain supported, but CLI
+flags win, including the fixed `--state-dir=/var/lib/tailhop`. No files are loaded
+by Tailhop itself, and existing configuration and state are never deleted automatically.
 
 Service activation alone does not confirm completed Tailnet enrollment. Keep
 state intact when restarting or updating:
@@ -185,7 +190,7 @@ console, plus the hostname, port, and other settings used by the direct process.
 Prepare the dedicated account, binary, and unit using
 [Install as a systemd service](#install-as-a-systemd-service), but **do not run
 `enable --now` or start the service yet**. Skip enrollment-key setup when reusing
-state. If you copied the example environment file, remove its `TS_AUTHKEY`
+state. If an existing environment file contains `TS_AUTHKEY`, remove that
 assignment with `sudoedit`; do not overwrite an existing environment file.
 
 Stop the direct process with Ctrl-C, or `kill -TERM <pid>` using its known PID.

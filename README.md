@@ -69,8 +69,9 @@ Extract a verified Linux release archive, then:
 
 Native state defaults to `$XDG_STATE_HOME/tailhop` when absolute, otherwise
 `$HOME/.local/state/tailhop`. Flags override environment variables, then defaults.
-For initial key enrollment, supply `TS_AUTHKEY` securely through the environment;
-see [INSTALL.md](INSTALL.md) for a silent prompt and systemd installation.
+With no key, open the logged URL to enroll interactively. Optional `--auth-key`
+and legacy `TS_AUTHKEY` are also supported; see [INSTALL.md](INSTALL.md) for key
+exposure risks and systemd installation.
 Restart with the same state directory to reuse identity without a new key.
 Existing native users of `/var/lib/tailhop` should keep it explicitly with
 `--state-dir /var/lib/tailhop`; state is never migrated automatically.

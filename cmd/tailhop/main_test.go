@@ -1,6 +1,8 @@
 package main
 
 import (
+	"io"
+	"os"
 	"strings"
 	"testing"
 )
@@ -15,7 +17,7 @@ func TestResourceConfiguration(t *testing.T) {
 			t.Setenv("MAX_CLIENTS", "100")
 			t.Setenv("IDLE_TIMEOUT", "10m")
 			t.Setenv(tc.key, tc.value)
-			if err := run(); err == nil || !strings.Contains(err.Error(), tc.key) {
+			if _, err := parseConfig(nil, os.Getenv, io.Discard); err == nil || !strings.Contains(err.Error(), tc.key) {
 				t.Fatalf("invalid configuration: %v", err)
 			}
 		})

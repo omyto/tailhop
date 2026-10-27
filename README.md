@@ -51,9 +51,10 @@ using the same project and state volume. Do not use `docker compose down -v`:
 it can delete the persisted Tailscale identity. See the [Docker guide](docs/docker.md)
 for upgrade commands and [source development](docs/docker.md#development-build-from-source).
 
-Versioned image tags are recommended for predictable deployments. `latest` tracks
-the newest stable release and is convenient for testing and quick installation;
-updating it on Docker Hub does not update running containers. See
+Versioned image tags are recommended for predictable production deployments.
+`latest` tracks the most recently published stable release and is convenient for
+testing and quick installation; updating it on Docker Hub does not update running
+containers. See
 [image tags](docs/docker.md#image-tags) for pull examples and explicit Compose opt-in.
 
 ## Run the Linux binary

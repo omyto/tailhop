@@ -16,46 +16,46 @@ Tailnet client ──► tailhop (tsnet) ──► Host/container egress ──�
 
 ## Quick start
 
-Use the official [Docker Hub image](https://hub.docker.com/r/omyto/tailhop)
-with Docker and Compose installed; no source checkout or Go toolchain is needed.
-Obtain `compose.release.yaml` and `.env.example` from the maintainer and place
-both in a new deployment directory. Run from that directory:
+Use the official [Docker Hub image](https://hub.docker.com/r/omyto/tailhop).
 
-```sh
-cp .env.example .env
-chmod 600 .env
-```
+1. Run Tailhop:
 
-Edit `.env`: set `TAILHOP_VERSION` to an explicitly selected published tag from
-Docker Hub (there is no `latest` fallback), and replace `TS_AUTHKEY` with a
-Tailscale Auth Key for initial enrollment, not an API access token. Allow intended
-clients through Tailnet grants/ACLs on TCP 8080, then start:
+   ```bash
+   docker run -d \
+     --name tailhop \
+     --restart unless-stopped \
+     --stop-timeout 20 \
+     --cap-drop ALL \
+     --security-opt no-new-privileges \
+     -v tailhop-state:/var/lib/tailhop \
+     omyto/tailhop:latest
+   ```
 
-```sh
-docker compose -f compose.release.yaml config --quiet
-docker compose -f compose.release.yaml pull
-docker compose -f compose.release.yaml up -d
-docker compose -f compose.release.yaml ps
-docker compose -f compose.release.yaml logs --tail=50
-```
+   The named volume `tailhop-state` preserves the Tailscale identity across
+   container recreation. Keep it; deleting it can require enrollment again.
 
-Confirm the node in the Tailscale admin console. Remove `TS_AUTHKEY` from `.env`
-(and unset it in your shell if exported), then clear the container's environment:
+2. Follow the logs:
 
-```sh
-docker compose -f compose.release.yaml up -d --force-recreate
-```
+   ```bash
+   docker logs -f tailhop
+   ```
 
-For upgrades, change `TAILHOP_VERSION` in `.env`, pull, and recreate the container
-using the same project and state volume. Do not use `docker compose down -v`:
-it can delete the persisted Tailscale identity. See the [Docker guide](docs/docker.md)
-for upgrade commands and [source development](docs/docker.md#development-build-from-source).
+   Open the login URL in a browser, sign in, and complete Tailscale enrollment.
+   Confirm the node appears in your Tailnet and approve it if your policy requires
+   it. Keep the login URL private. Ctrl-C stops following logs, not the container.
 
-Versioned image tags are recommended for predictable production deployments.
-`latest` tracks the most recently published stable release and is convenient for
-testing and quick installation; updating it on Docker Hub does not update running
-containers. See
-[image tags](docs/docker.md#image-tags) for pull examples and explicit Compose opt-in.
+3. From an authorized Tailnet client, verify the proxy:
+
+   ```bash
+   curl --proxy http://tailhop:8080 https://ifconfig.me/ip
+   ```
+
+   `tailhop` is the default Tailscale hostname. Use its Tailnet IP if MagicDNS is
+   unavailable, and allow TCP 8080 through Tailnet grants/ACLs. The response should
+   show the public egress IP used by the Tailhop host/container.
+
+See the [Docker guide](docs/docker.md) for automated auth-key enrollment,
+configuration, Compose, upgrades, and source development.
 
 ## Run the Linux binary
 

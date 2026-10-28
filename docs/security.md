@@ -28,9 +28,20 @@ There is no SOCKS, UDP/QUIC forwarding, HTTP/2 CONNECT, HTTPS proxy listener, Up
 
 ## Secrets and state
 
-Interactive enrollment requires no key or configuration file. If using a key, choose one appropriate for your Tailnet's approval/tag policy. `--auth-key` is optional, not a secret-management mechanism: literal arguments can appear in shell history, process listings, and container metadata. Remove the flag after enrollment. Keep any legacy environment files private and out of version control. Environment variables are not a secret store: privileged operators, processes sharing the service UID, container administrators, and diagnostic tooling may expose them. Avoid printing resolved Compose configuration; use `docker compose config --quiet`.
+For manual setup, use browser login through the URL in the logs. Keep that URL
+private. For automation, supply `TS_AUTHKEY` for enrollment, using a key suited
+to your Tailnet's approval/tag policy. Neither method needs to be repeated while
+persisted state remains valid.
 
-After enrollment, remove `TS_AUTHKEY` and recreate the container or restart the service to clear the running environment. Valid persisted tsnet state allows reuse of the node identity without a new key. An uninitialized node without a key may log an interactive enrollment URL; protect that URL as a secret.
+After key enrollment, remove `TS_AUTHKEY` from its source and recreate the
+container or restart the native process/service. Keep the state. Restarting a
+container alone does not clear its saved environment.
+
+Environment values can be inspected by privileged operators and container
+administrators. Keep environment files private and out of version control.
+Use `docker compose config --quiet` to avoid printing resolved credentials.
+The optional `--auth-key` flag can also expose literal keys through shell history,
+process listings, and container metadata; remove it after enrollment.
 
 State contains node credentials. Keep `/var/lib/tailhop` private (mode 0700), owned by the runtime user, and persistent across updates. Protect backups as secrets too. Deleting state may require enrollment again and create a new identity. Do not store it in a temporary directory or commit it. See [Docker](docker.md) and [systemd](systemd.md) for ownership details.
 

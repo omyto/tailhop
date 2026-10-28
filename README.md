@@ -18,39 +18,36 @@ Tailnet client ──► tailhop (tsnet) ──► Host/container egress ──�
 
 Use the official [Docker Hub image](https://hub.docker.com/r/omyto/tailhop).
 
-For Docker, use `TS_AUTHKEY` for initial enrollment and keep the state volume.
-Browser enrollment through logs is an alternative when you do not want to use a key.
+For manual setup, sign in through your browser; no auth key is needed.
+For automated deployment, see [auth-key enrollment](docs/docker.md#automated-enrollment-with-ts_authkey).
+Existing valid state needs neither a new key nor another browser login.
 
-1. Create a Tailscale auth key for the intended Tailnet, then run in Bash:
+1. Start Tailhop:
 
    ```bash
-   read -r -s -p 'Tailscale auth key: ' TS_AUTHKEY
-   printf '\n'
-   export TS_AUTHKEY
    docker run -d \
      --name tailhop \
      --restart unless-stopped \
      --stop-timeout 20 \
      --cap-drop ALL \
      --security-opt no-new-privileges \
-     -e TS_AUTHKEY \
      -v tailhop-state:/var/lib/tailhop \
      omyto/tailhop:latest
-   unset TS_AUTHKEY
    ```
 
-   The named volume `tailhop-state` preserves the Tailscale identity across
-   container recreation. Keep it; deleting it can require enrollment again.
+   Keep the `tailhop-state` volume to preserve the node identity across restarts
+   and container replacement.
 
-2. Confirm the node is connected in the Tailscale device view and approve it if
-   required. A running container or a `proxy listening` log alone does not mean
-   enrollment is complete. After enrollment, stop and remove the container, then
-   repeat the run command **without `-e TS_AUTHKEY`**, keeping the same volume.
-   Unsetting the shell variable alone does not clear the container's environment.
+2. Get the login URL:
 
-   The prompt keeps the key out of shell history, but Docker administrators can
-   inspect container environment values. See the [Docker guide](docs/docker.md)
-   for complete cleanup and Compose instructions.
+   ```bash
+   docker logs -f tailhop
+   ```
+
+   Open the URL in your browser, sign in, and approve the node if required.
+   Keep the URL private. Ctrl-C stops following logs, not the container.
+   A running container or `proxy listening` message alone does not mean the
+   node is connected.
 
 3. From an authorized Tailnet client, verify the proxy:
 

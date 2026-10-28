@@ -6,11 +6,48 @@ End users need Docker and outbound connectivity for Tailscale and proxied
 destinations; no source checkout, Go toolchain, or deployment-file download is
 required. Start with Docker Run, or use Compose for declarative deployment.
 
-## Docker Run: quick deployment
+Choose enrollment by how you deploy:
 
-Prefer `TS_AUTHKEY` for initial Docker enrollment. Create a Tailscale auth key
-for the intended Tailnet and its approval/tag policy, not an API access token.
-Enter it at a Bash prompt so its value is not recorded in shell history:
+- **Manual setup:** open the login URL from the logs. No auth key is needed.
+- **Automation:** supply `TS_AUTHKEY` for initial enrollment.
+- **Existing valid state:** keep the volume; no new login or key is needed.
+
+## Docker Run: manual setup
+
+```bash
+docker run -d \
+  --name tailhop \
+  --restart unless-stopped \
+  --stop-timeout 20 \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  -v tailhop-state:/var/lib/tailhop \
+  omyto/tailhop:latest
+docker logs -f tailhop
+```
+
+Open the login URL in your browser, sign in, and approve the node if your policy
+requires it. Keep the URL private; it remains in container logs. Ctrl-C stops
+following logs, not the container. No login command inside the container is needed.
+
+Confirm the node is connected in the Tailscale device view. A running container
+or `proxy listening` message alone does not prove enrollment is complete.
+From an authorized Tailnet client, check forwarding:
+
+```sh
+curl --proxy http://tailhop:8080 https://ifconfig.me/ip
+```
+
+`tailhop` is the default hostname. Use the node's Tailnet IP if MagicDNS is
+unavailable. Grants/ACLs must allow TCP 8080 (or your configured port).
+The response shows the host/container's public egress IP, including any NAT,
+VPN, or routing policy. Add `--noproxy ""` if `NO_PROXY` would bypass the proxy.
+
+### Automated enrollment with TS_AUTHKEY
+
+Create a Tailscale auth key for your Tailnet's approval/tag policy, not an API
+access token. Supply it through your deployment environment. To try this in Bash
+without putting the key value in shell history:
 
 ```bash
 read -r -s -p 'Tailscale auth key: ' TS_AUTHKEY
@@ -28,62 +65,18 @@ docker run -d \
 unset TS_AUTHKEY
 ```
 
-Confirm the node appears connected in the Tailscale device view and approve it
-if your policy requires it. A running container or `proxy listening` message
-alone does not prove enrollment is complete. Check forwarding from an authorized
-Tailnet client:
+Confirm connection, any required device approval, and proxy access as above.
+Then stop and remove the container, and repeat the run command without
+`-e TS_AUTHKEY`, using the **same volume**. Skip the browser login when state is
+still valid. Repeat any custom non-secret settings too.
 
-```sh
-curl --proxy http://tailhop:8080 https://ifconfig.me/ip
-```
+Unsetting the shell variable or restarting a container does not clear its saved
+environment. Docker administrators can inspect environment values. Avoid literal
+keys in CLI arguments, which can also appear in history and process listings.
 
-`tailhop` is the default hostname. MagicDNS must resolve it; otherwise use the
-node's Tailnet IP. Grants/ACLs must allow TCP 8080 (or your configured port).
-The response shows the host/container's actual public egress IP, including any
-NAT, VPN, or routing policy. Add `--noproxy ""` if `NO_PROXY` would bypass it.
-
-### Remove the enrollment key
-
-After successful enrollment, recreate the container without the key, keeping
-its state volume and any custom non-secret settings:
-
-```bash
-docker stop tailhop
-docker rm tailhop
-docker run -d \
-  --name tailhop \
-  --restart unless-stopped \
-  --stop-timeout 20 \
-  --cap-drop ALL \
-  --security-opt no-new-privileges \
-  -v tailhop-state:/var/lib/tailhop \
-  omyto/tailhop:latest
-```
-
-Unsetting the shell variable does not remove the key from an existing container;
-a restart alone does not clear its environment either. Docker administrators can
-inspect environment values. Avoid literal keys in CLI arguments, which can also
-appear in shell history and process listings. Tailhop does not load `.env` files
-or write the raw enrollment key to its own configuration file.
-
-Valid persisted state reuses the identity without a key. Missing, revoked, or
-expired state may require reauthentication. Never run two instances with the
-same state volume, or copies of the same node identity, concurrently.
-
-### Alternative: browser enrollment without an auth key
-
-Run the keyless command above and follow the logs:
-
-```sh
-docker logs -f tailhop
-```
-
-On first start without credentials, tsnet initiates interactive login. Open the
-logged URL in a browser, sign in to the intended Tailnet, and finish enrollment.
-Confirm connection and any required device approval, then verify forwarding.
-Keep the login URL private; it is retained in container logs. Ctrl-C exits log
-following without stopping the container. No shell or Tailscale CLI inside the
-container is required. The same state volume preserves identity on later starts.
+Keep the state volume across restarts and updates. Missing, expired, or revoked
+state may require another browser login or an auth key. Never run two instances
+with the same state or copies of the same node identity at once.
 
 ### Optional configuration
 
@@ -143,17 +136,13 @@ same identity at once, even if you copy its state to another volume.
 
 ## Docker Compose: persistent deployment
 
-Save this self-contained example as `compose.yaml` in a deployment directory.
-It needs no repository checkout. The explicit environment mapping below passes
-an initial enrollment key from your shell (or a Compose `.env` file):
+Save this as `compose.yaml`. No `.env` file or auth key is needed for manual setup:
 
 ```yaml
 services:
   tailhop:
     image: omyto/tailhop:latest
     restart: unless-stopped
-    environment:
-      TS_AUTHKEY: ${TS_AUTHKEY:-}
     stop_grace_period: 20s
     cap_drop:
       - ALL
@@ -166,37 +155,47 @@ volumes:
     name: tailhop-state
 ```
 
-```bash
-read -r -s -p 'Tailscale auth key: ' TS_AUTHKEY
-printf '\n'
-export TS_AUTHKEY
+```sh
 docker compose config --quiet
 docker compose pull
 docker compose up -d
-unset TS_AUTHKEY
+docker compose logs -f tailhop
 ```
 
-Confirm enrollment/approval and test forwarding as described above. Then remove
-`TS_AUTHKEY` from the service's `environment` mapping and any Compose `.env` file,
-and recreate the container to clear its environment:
+For a new node, open the login URL and complete the same browser login described
+above. Existing valid state is reused without another login.
+
+The volume name matches Docker Run's `tailhop-state`. Stop and remove the old
+container before switching methods. For an existing deployment, keep its original
+volume. For a separate node, use a different volume name and hostname.
+
+### Automated Compose enrollment
+
+For automation, add this under the `tailhop` service before the first start:
+
+```yaml
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?Set TS_AUTHKEY for enrollment}
+```
+
+Supply `TS_AUTHKEY` from your deployment environment, then run
+`docker compose up -d`. For a manual test, use the Bash key prompt shown above before running
+Compose. Compose can also read the value from a `.env` file; keep that file
+private (`chmod 600 .env`) and out of version control. Tailhop itself does not
+read `.env` files.
+
+After confirming enrollment and proxy access, remove the `TS_AUTHKEY` mapping
+and the key from its source, then recreate the container:
 
 ```sh
+unset TS_AUTHKEY
 docker compose up -d --force-recreate
 ```
 
-Keep the volume. Unsetting the shell variable alone does not clear an existing
-container's environment. If storing a key in `.env`, restrict its permissions
-(for example, `chmod 600 .env`) and never commit it. Compose loads `.env` for
-interpolation; Tailhop itself does not read it. Use `config --quiet` to validate
-without printing the resolved key.
+Keep the same volume. A restart alone does not clear the container's environment.
+Use `docker compose config --quiet` to validate without printing the resolved key.
 
-For browser enrollment instead, omit the `environment` mapping and key prompt,
-start with `docker compose up -d`, then use `docker compose logs -f tailhop` to
-get the login URL. Protect that URL as a secret.
-
-The explicit volume name matches Docker Run's `tailhop-state`. To switch methods,
-stop and remove the old container first; never share active node state concurrently.
-For a separate node, choose a different volume name and hostname.
+### Configuration and updates
 
 For predictable production deployments, replace `latest` in `image:` with an
 explicit published version. Optional customizations use service `command`:
@@ -237,9 +236,9 @@ docker compose -f compose.release.yaml up -d
 
 Use `-f compose.release.yaml` consistently for lifecycle commands and upgrades.
 Pin a version by editing `image:`; add `command` flags for optional settings.
-For initial key enrollment, add the explicit `environment` mapping from the
-Compose example above and follow its key-removal procedure. Without that mapping,
-this file uses browser enrollment when the state is not already authenticated.
+For initial key enrollment, add the explicit `environment` mapping from
+[Automated Compose enrollment](#automated-compose-enrollment) and remove the key
+after enrollment. Without that mapping, use browser login for a new node.
 This file retains its original project-scoped `state` volume: keep the same
 project/deployment directory and volume across updates. It does not automatically
 reuse the Quick Start's `tailhop-state` volume or migrate existing state.

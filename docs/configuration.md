@@ -19,7 +19,7 @@ Unknown flags, positional arguments, and invalid configuration fail with a non-z
 | `--log-level` | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
 | `--max-clients` | `MAX_CLIENTS` | `100` | Positive integer; global inbound TCP connection limit. |
 | `--idle-timeout` | `IDLE_TIMEOUT` | `10m` | Positive Go duration such as `30s`, `10m`, `2h`. |
-| `--auth-key` | `TS_AUTHKEY` | empty | Optional initial enrollment/reauthentication key; interactive login if no key or enrolled state exists. |
+| `--auth-key` | `TS_AUTHKEY` | empty | Optional initial enrollment/reauthentication key; browser login when no credentials or valid state are available. |
 
 No configuration file is required. CLI flags are recommended for direct execution;
 environment variables remain supported for automation and backward compatibility.
@@ -28,6 +28,11 @@ legacy `TS_AUTH_KEY`. `--auth-key=` disables both environment auth-key fallbacks
 omitting the flag preserves them. This does not disable independent OAuth or
 identity-federation credentials. With no credentials, tsnet starts interactive
 login when necessary; valid persisted state needs no new key.
+
+For manual setup, open the login URL from the logs; no auth key is required.
+For automation, supply `TS_AUTHKEY` for enrollment. This choice applies to Docker
+and native deployments alike. Keep valid state to avoid enrolling again.
+
 Never put an auth key in a permanent service command. CLI keys can appear in shell
 history, process listings and Docker metadata; the flag is not secret management.
 Environment variables can also be inspected by privileged operators.

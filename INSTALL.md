@@ -54,18 +54,12 @@ With no key, run `./tailhop`, open the login URL printed in its logs in a browse
 and complete Tailscale login. Confirm the node in the Tailscale device view and
 approve it if your Tailnet policy requires that. Keep the login URL private.
 
-For optional one-time key enrollment, replace the placeholder below with an
-appropriate Tailscale Auth Key, not an API access token:
-
-```bash
-./tailhop --auth-key '<AUTH_KEY>'
-```
-
-**CLI keys can appear in shell history and process listings; this flag is not a
-secret-management mechanism.** Prefer interactive login for manual setup.
-`TS_AUTHKEY` remains supported for automation; environment variables can also be
-inspected by privileged processes or processes with the same UID. Do not dump them.
-No configuration file, auth key, or secret prompt is required for normal startup.
+For automation, supply `TS_AUTHKEY` through your deployment environment.
+After enrollment, restart without the key and keep the same state directory.
+Environment values can be inspected by privileged processes or those with the
+same UID. The optional `--auth-key` flag is also supported, but literal keys can
+appear in shell history and process listings. For manual setup, browser login
+avoids creating and removing a key.
 
 Press Ctrl-C (SIGINT) to stop gracefully, or send `kill -TERM <pid>` from another
 terminal. The proxy drains requests/tunnels for up to ten seconds, then closes

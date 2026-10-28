@@ -81,6 +81,10 @@ sudo systemctl daemon-reload
 
 ### Start and enroll
 
+For manual setup, use browser login below. For automation, configure `TS_AUTHKEY`
+as described in [Optional configuration and automation](#optional-configuration-and-automation)
+before starting. Existing valid state needs no new login or key.
+
 ```sh
 sudo systemctl enable --now tailhop
 systemctl status tailhop

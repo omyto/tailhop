@@ -18,31 +18,39 @@ Tailnet client ──► tailhop (tsnet) ──► Host/container egress ──�
 
 Use the official [Docker Hub image](https://hub.docker.com/r/omyto/tailhop).
 
-1. Run Tailhop:
+For Docker, use `TS_AUTHKEY` for initial enrollment and keep the state volume.
+Browser enrollment through logs is an alternative when you do not want to use a key.
+
+1. Create a Tailscale auth key for the intended Tailnet, then run in Bash:
 
    ```bash
+   read -r -s -p 'Tailscale auth key: ' TS_AUTHKEY
+   printf '\n'
+   export TS_AUTHKEY
    docker run -d \
      --name tailhop \
      --restart unless-stopped \
      --stop-timeout 20 \
      --cap-drop ALL \
      --security-opt no-new-privileges \
+     -e TS_AUTHKEY \
      -v tailhop-state:/var/lib/tailhop \
      omyto/tailhop:latest
+   unset TS_AUTHKEY
    ```
 
    The named volume `tailhop-state` preserves the Tailscale identity across
    container recreation. Keep it; deleting it can require enrollment again.
 
-2. Follow the logs:
+2. Confirm the node is connected in the Tailscale device view and approve it if
+   required. A running container or a `proxy listening` log alone does not mean
+   enrollment is complete. After enrollment, stop and remove the container, then
+   repeat the run command **without `-e TS_AUTHKEY`**, keeping the same volume.
+   Unsetting the shell variable alone does not clear the container's environment.
 
-   ```bash
-   docker logs -f tailhop
-   ```
-
-   Open the login URL in a browser, sign in, and complete Tailscale enrollment.
-   Confirm the node appears in your Tailnet and approve it if your policy requires
-   it. Keep the login URL private. Ctrl-C stops following logs, not the container.
+   The prompt keeps the key out of shell history, but Docker administrators can
+   inspect container environment values. See the [Docker guide](docs/docker.md)
+   for complete cleanup and Compose instructions.
 
 3. From an authorized Tailnet client, verify the proxy:
 
@@ -54,7 +62,7 @@ Use the official [Docker Hub image](https://hub.docker.com/r/omyto/tailhop).
    unavailable, and allow TCP 8080 through Tailnet grants/ACLs. The response should
    show the public egress IP used by the Tailhop host/container.
 
-See the [Docker guide](docs/docker.md) for automated auth-key enrollment,
+See the [Docker guide](docs/docker.md) for auth-key and browser enrollment,
 configuration, Compose, upgrades, and source development.
 
 ## Run the Linux binary

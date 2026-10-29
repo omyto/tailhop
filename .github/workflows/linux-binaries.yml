@@ -56,7 +56,7 @@ jobs:
           printf 'commit=%s\n' "$commit" >> "$GITHUB_OUTPUT"
       - name: Check tagged installation inputs
         run: |
-          for file in LICENSE THIRD_PARTY_NOTICES INSTALL.md packaging/systemd/tailhop.service packaging/systemd/tailhop.env.example; do
+          for file in install.sh LICENSE THIRD_PARTY_NOTICES INSTALL.md packaging/systemd/tailhop.service packaging/systemd/tailhop.env.example; do
             if ! git cat-file -e "HEAD:$file"; then
               echo "::error::Release tag lacks $file; use a tag containing the self-contained installation files."
               exit 1
@@ -79,19 +79,21 @@ jobs:
         run: go test ./...
       - name: Race test
         run: go test -race ./...
+      - name: Test distribution and installer
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
       - name: Build and verify archives
         id: archives
         env:
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
         run: |
-          git diff --exit-code HEAD -- cmd internal go.mod go.sum LICENSE THIRD_PARTY_NOTICES INSTALL.md packaging/systemd
+          git diff --exit-code HEAD -- cmd internal go.mod go.sum install.sh LICENSE THIRD_PARTY_NOTICES INSTALL.md packaging/systemd
           out="$RUNNER_TEMP/tailhop-linux-binaries"
           mkdir -p "$out"
           work=$(mktemp -d)
           trap 'rm -rf "$work"' EXIT
           epoch=$(git show -s --format=%ct HEAD)
-          files=(tailhop LICENSE THIRD_PARTY_NOTICES INSTALL.md packaging/systemd/tailhop.service packaging/systemd/tailhop.env.example)
+          files=(tailhop install.sh LICENSE THIRD_PARTY_NOTICES INSTALL.md packaging/systemd/tailhop.service packaging/systemd/tailhop.env.example)
           printf '%s\n' "${files[@]}" | LC_ALL=C sort > "$work/expected-files"
           for arch in amd64 arm64; do
             stage="$work/$arch"
@@ -108,6 +110,7 @@ jobs:
             for file in "${files[@]:1}"; do
               install -D -m 0644 "$file" "$stage/$file"
             done
+            chmod 0755 "$stage/install.sh"
             archive="$out/tailhop_${VERSION}_linux_${arch}.tar.gz"
             tar --sort=name --mtime="@$epoch" --owner=0 --group=0 --numeric-owner \
               -C "$stage" -cf - "${files[@]}" | gzip -n > "$archive"
@@ -117,6 +120,9 @@ jobs:
             mkdir -p "$extracted"
             tar --no-same-owner -xzf "$archive" -C "$extracted"
             test -s "$extracted/tailhop" && test -x "$extracted/tailhop"
+            test -x "$extracted/install.sh"
+            sh -n "$extracted/install.sh"
+            sh "$extracted/install.sh" --help
             verify_files() {
               for file in "${files[@]}"; do
                 test -f "$extracted/$file" && test ! -L "$extracted/$file" && \

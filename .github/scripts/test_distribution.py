@@ -12,7 +12,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-MATERIALS = ['LICENSE', 'THIRD_PARTY_NOTICES', 'INSTALL.md',
+MATERIALS = ['install.sh', 'LICENSE', 'THIRD_PARTY_NOTICES', 'INSTALL.md',
              'packaging/systemd/tailhop.service', 'packaging/systemd/tailhop.env.example']
 
 
@@ -66,7 +66,7 @@ else:
                     for member in tar.getmembers():
                         self.assertTrue(member.isfile())
                         self.assertEqual((member.uid, member.gid), (0, 0))
-                        self.assertEqual(member.mode, 0o755 if member.name == 'tailhop' else 0o644)
+                        self.assertEqual(member.mode, 0o755 if member.name in ('tailhop', 'install.sh') else 0o644)
                         if member.name != 'tailhop':
                             self.assertEqual(tar.extractfile(member).read(), (ROOT / member.name).read_bytes())
 

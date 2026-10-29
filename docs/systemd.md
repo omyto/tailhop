@@ -1,6 +1,6 @@
 # Native Linux with systemd
 
-The [service unit](../packaging/systemd/tailhop.service) runs the same executable as [Docker](docker.md), on Linux hosts with systemd. Installation commands below are for the administrator to run manually.
+The [service unit](../packaging/systemd/tailhop.service) runs the same executable as [Docker](docker.md), on Linux hosts with systemd. Use the bundled `install.sh` on the target host to automate service installation.
 
 ## Obtain the executable
 
@@ -11,7 +11,7 @@ Start with the bundled [INSTALL.md](../INSTALL.md): it covers direct execution a
 
 The binary workflow creates or updates a **GitHub Draft Release** after Go checks, package validation, and archive integrity verification succeed. It never publishes a release. Draft assets are not public downloads; a maintainer must review and publish a verified draft. An authorized maintainer can rebuild the existing tag without changing it:
 
-1. Make [linux-binaries.yml](../.github/workflows/linux-binaries.yml) available on the default branch for manual execution. Choose an existing stable release tag containing `INSTALL.md`, `LICENSE`, `THIRD_PARTY_NOTICES`, and both systemd packaging files. Everything bundled must come from that tagged source.
+1. Make [linux-binaries.yml](../.github/workflows/linux-binaries.yml) available on the default branch for manual execution. Choose an existing stable release tag containing `install.sh`, `INSTALL.md`, `LICENSE`, `THIRD_PARTY_NOTICES`, and both systemd packaging files. Everything bundled must come from that tagged source.
 2. Open **Actions → Linux binaries → Run workflow**. Select the default branch as the workflow source and enter the chosen tag in `release_tag`. The workflow checks out and verifies that exact tagged commit before testing/building. Do not repush, move, or recreate tags.
 3. After both jobs succeed, open **Releases** and select the draft for that tag. Download only the archive matching the target machine: `tailhop_<version>_linux_amd64.tar.gz` for `x86_64`, or `tailhop_<version>_linux_arm64.tar.gz` for `aarch64` (`uname -m` identifies it).
 
@@ -29,6 +29,7 @@ Each archive includes:
 
 ```text
 tailhop
+install.sh
 LICENSE
 THIRD_PARTY_NOTICES
 INSTALL.md
@@ -62,22 +63,27 @@ Already running the binary directly? Follow [Migrate from direct execution to sy
 
 ## Install the service
 
-Run the administration commands below manually on the target Linux host. Both installation methods provide `./tailhop` and use the same packaging paths.
-
-Create the dedicated system group and non-login user if absent. If either already exists, confirm it is a suitable dedicated service account before continuing; do not repurpose an unrelated account. These commands use the distribution's `nologin` executable:
+From the extracted, verified archive or a checkout with `./tailhop` built:
 
 ```sh
-getent group tailhop >/dev/null || sudo groupadd --system tailhop
-getent passwd tailhop >/dev/null || sudo useradd --system --gid tailhop --home-dir /var/lib/tailhop --no-create-home --shell "$(command -v nologin)" tailhop
+sudo sh ./install.sh --start
+sudo journalctl -u tailhop -f
 ```
 
-Install the binary and unit; no environment file is needed for installation:
+The script creates the dedicated non-login account, installs the binary and unit,
+reloads systemd, and enables and starts (or restarts) the service. It uses local
+files and preserves existing configuration, drop-ins, and state. Keep unit
+customizations in drop-ins: the main unit is replaced on installation.
+
+For automated enrollment or state migration, first install without starting:
 
 ```sh
-sudo install -o root -g root -m 0755 ./tailhop /usr/local/bin/tailhop
-sudo install -o root -g root -m 0644 packaging/systemd/tailhop.service /etc/systemd/system/tailhop.service
-sudo systemctl daemon-reload
+sudo sh ./install.sh
 ```
+
+Then prepare configuration or migrate state before enabling the service below.
+See the self-contained [installer instructions](../INSTALL.md#install-as-a-systemd-service)
+for prerequisites and account checks.
 
 ### Start and enroll
 
@@ -147,16 +153,19 @@ Prepare `./tailhop` before stopping the service. For a prebuilt update, obtain t
 go build -trimpath -o tailhop ./cmd/tailhop
 ```
 
-For either method, keep /etc/tailhop/tailhop.env and /var/lib/tailhop intact, stop the service, replace only the executable, and restart:
+From the verified archive or built checkout, install the new payload and restart:
 
 ```sh
-sudo systemctl stop tailhop
-sudo install -o root -g root -m 0755 ./tailhop /usr/local/bin/tailhop
-sudo systemctl restart tailhop
+sudo sh ./install.sh --start
 systemctl status tailhop
 ```
 
-Check logs with `sudo journalctl -u tailhop -n 50 --no-pager`, confirm the same device identity remains in the Tailscale device view, and repeat the client curl test. If updating the unit itself, install its new version and run `sudo systemctl daemon-reload` before restarting.
+The installer atomically replaces each binary/unit file, reloads systemd, and
+enables and restarts the service. Configuration, drop-ins, and state are retained.
+It does not automatically roll back files on failure; investigate any installation
+error before restarting. Check logs with `sudo journalctl -u tailhop -n 50 --no-pager`,
+confirm the same device identity remains in the Tailscale device view, and repeat
+the client curl test.
 
 ## Uninstall
 

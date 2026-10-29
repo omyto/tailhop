@@ -113,6 +113,7 @@ internal/proxy/policy.go
 internal/proxy/policy_test.go
 Dockerfile
 compose.yaml
+install.sh
 packaging/systemd/tailhop.service
 packaging/systemd/tailhop.env.example
 .dockerignore
@@ -144,7 +145,7 @@ Add at most one small extra internal Go file if it materially improves clarity. 
 - Read optional /etc/tailhop/tailhop.env using EnvironmentFile=- syntax. Document root ownership and mode 0600, environment-variable secret exposure, initial enrollment, and removing TS_AUTHKEY after successful enrollment while preserving valid state.
 - Order after and want network-online.target. Use Restart=on-failure with a five-second delay, TimeoutStopSec=20s, default SIGTERM and journald logging, and WantedBy=multi-user.target for boot startup.
 - Apply NoNewPrivileges=true, UMask=0077, ProtectSystem=strict, and ProtectHome=true. PrivateTmp=true supplies writable private temporary storage; StateDirectory remains the persistent writable exception. Do not restrict networking/DNS or require root execution, TUN, capabilities, firewall changes, or a separate tailscaled daemon.
-- Document manual installation, operations, binary replacement with identity preservation, and uninstallation that retains configuration and state. Do not automatically install/start the service or delete persistent data. This native service packaging supports Linux with systemd.
+- Provide a local `install.sh` for explicit administrator invocation, bundled in Linux archives and usable from a built checkout. By default install only; `--start` explicitly enables and starts/restarts the service. Preserve existing configuration, drop-ins, and persistent state; reject incompatible existing service accounts. Document installation, operations, binary replacement with identity preservation, and uninstallation that retains configuration and state. Never delete persistent data. This native service packaging supports Linux with systemd.
 - Validate using systemd-analyze verify when available; distinguish structural errors from missing installation prerequisites. Live enrollment, directory ownership, sandbox compatibility and service lifecycle remain manual acceptance checks.
 
 ## 9. Tests and verification

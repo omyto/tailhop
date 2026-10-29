@@ -27,7 +27,7 @@ tar -xzf tailhop_0.1.0_linux_amd64.tar.gz -C tailhop-install
 cd tailhop-install
 ```
 
-The archive includes `tailhop`, `LICENSE`, `THIRD_PARTY_NOTICES`, this guide, and
+The archive includes `tailhop`, `install.sh`, `LICENSE`, `THIRD_PARTY_NOTICES`, this guide, and
 both files under `packaging/systemd/`. Keep the licensing materials when
 redistributing the executable; the notices retain upstream terms and identify
 outstanding attribution checks. They do not replace Tailhop's own MIT license.
@@ -97,17 +97,37 @@ Docker and the packaged systemd service continue using `/var/lib/tailhop`.
 
 ## Install as a systemd service
 
-Use a dedicated non-login account. If an account/group already exists, confirm
-it belongs to tailhop before continuing; do not repurpose an unrelated account.
-Install the binary and unit without creating an environment file:
+Already running directly? Install without `--start`, then follow
+[Migrate from direct execution to systemd](#migrate-from-direct-execution-to-systemd)
+before starting the service to preserve that node identity.
+
+From the verified, extracted archive, install and start with one command:
 
 ```sh
-getent group tailhop >/dev/null || sudo groupadd --system tailhop
-getent passwd tailhop >/dev/null || sudo useradd --system --gid tailhop --home-dir /var/lib/tailhop --no-create-home --shell "$(command -v nologin)" tailhop
-sudo install -o root -g root -m 0755 ./tailhop /usr/local/bin/tailhop
-sudo install -o root -g root -m 0644 packaging/systemd/tailhop.service /etc/systemd/system/tailhop.service
-sudo systemctl daemon-reload
+sudo sh ./install.sh --start
+sudo journalctl -u tailhop -f
 ```
+
+Open the logged login URL in your browser to enroll when needed. No auth key or
+environment file is required. The installer creates the dedicated non-login
+`tailhop` account, installs the binary and unit, reloads systemd, enables startup
+at boot, and starts or restarts the service. It uses only local archive contents;
+it does not download files or install dependencies. Run it on the target Linux
+host with a running systemd system manager and the `getent`, `groupadd`, `useradd`,
+and standard file utilities available. It rejects an incompatible existing
+`tailhop` account/group instead of repurposing it.
+
+To install without starting, stopping, or enabling the service:
+
+```sh
+sudo sh ./install.sh
+```
+
+Use this mode before configuring automated enrollment or migrating state from
+direct execution. Existing `/etc/tailhop/tailhop.env`, systemd drop-ins, and
+`/var/lib/tailhop` are preserved. The bundled main unit is replaced; keep local
+unit customizations in drop-ins. A running process continues using its old binary
+until restarted. `--start` also enables a previously disabled service.
 
 At startup, `StateDirectory=tailhop` creates and owns `/var/lib/tailhop` as
 `tailhop:tailhop` with mode 0700. State persists across restarts and binary updates.
@@ -117,6 +137,8 @@ For direct execution users, follow [the migration guide](#migrate-from-direct-ex
 before starting the service.
 
 ### Start and enroll interactively
+
+If you installed without `--start`, enable and start when ready:
 
 ```sh
 sudo systemctl enable --now tailhop
@@ -338,16 +360,16 @@ For an update, verify the new archive against its GitHub asset digest, then
 extract it into a fresh directory as above. Then, from that directory:
 
 ```sh
-sudo systemctl stop tailhop
-sudo install -o root -g root -m 0755 ./tailhop /usr/local/bin/tailhop
-sudo systemctl restart tailhop
+sudo sh ./install.sh --start
 systemctl status tailhop
 sudo journalctl -u tailhop -n 50 --no-pager
 ```
 
-Keep `/etc/tailhop/tailhop.env` and `/var/lib/tailhop` intact. If updating the
-unit too, install the bundled unit and run `sudo systemctl daemon-reload` before
-restarting. Repeat the curl check and confirm the same Tailscale device identity.
+The installer atomically replaces each binary/unit file and reloads systemd,
+then enables and restarts the service. Keep `/etc/tailhop/tailhop.env` and
+`/var/lib/tailhop` intact. Repeat the curl check and confirm the same Tailscale
+device identity. If installation fails, inspect the error before starting or
+restarting; it does not automatically roll back replaced files.
 For direct execution, stop the old process, replace its executable, and restart
 with the same state path and flags.
 

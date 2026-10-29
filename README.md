@@ -83,6 +83,17 @@ Existing native users of `/var/lib/tailhop` should keep it explicitly with
 `--state-dir /var/lib/tailhop`; state is never migrated automatically.
 Tailhop does not load `.env` files; Compose supplies its environment.
 
+To install as a systemd service, run from the verified, extracted archive:
+
+```sh
+sudo sh ./install.sh --start
+sudo journalctl -u tailhop -f
+```
+
+The installer creates the service account and installs, enables, and starts the
+service. Open the logged URL to enroll. Omit `--start` to install only; existing
+configuration and state are preserved. See [INSTALL.md](INSTALL.md#install-as-a-systemd-service).
+
 ## Use the proxy
 
 From an authorized Tailnet client, test HTTP and HTTPS:

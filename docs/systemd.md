@@ -6,11 +6,14 @@ For an online installation with curl and standard Linux utilities:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh
-sudo journalctl -u tailhop -f
 ```
 
 This selects a published stable amd64/arm64 release, verifies its GitHub asset
-SHA-256, and installs using sudo when needed. Configuration and state are retained.
+SHA-256, and installs using sudo when needed. It waits up to 30 seconds for the
+login URL from this service start and prints it directly in the terminal.
+Already authenticated nodes report Running; delayed URLs or unavailable journals
+leave a command for following logs. Keep login URLs private. Configuration and
+state are retained.
 It needs a public release containing the installer; drafts are unavailable.
 See [one-command installation](../INSTALL.md#install-with-one-command) for
 prerequisites, version pinning, and installation without starting the service.
@@ -82,12 +85,13 @@ From the extracted, verified archive or a checkout with `./tailhop` built:
 
 ```sh
 sudo sh ./install.sh
-sudo journalctl -u tailhop -f
 ```
 
 The script creates the dedicated non-login account, installs the binary and unit,
-reloads systemd, and enables and starts (or restarts) the service. It uses local
-files and preserves existing configuration, drop-ins, and state. Keep unit
+reloads systemd, and enables and starts (or restarts) the service. It then prints
+the login URL when needed, waiting up to 30 seconds before leaving journal
+instructions. It uses local files and preserves existing configuration,
+drop-ins, and state. Keep unit
 customizations in drop-ins: the main unit is replaced on installation.
 
 For automated enrollment or state migration, first install without starting:

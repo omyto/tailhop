@@ -73,8 +73,10 @@ curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh
 Requires curl, CA certificates, standard Linux utilities (`awk`, `tar`,
 `gzip`, `sha256sum`), and root or sudo. No Python is needed. The script detects
 amd64/arm64, verifies the archive against GitHub's asset SHA-256 digest, and
-installs the service while preserving existing configuration and state. Open the
-login URL from `sudo journalctl -u tailhop -f` when enrollment is needed.
+installs the service while preserving existing configuration and state. It waits
+up to 30 seconds for the login URL and prints it in your terminal when needed.
+Open the URL in your browser and keep it private. If no URL appears, follow the
+printed journal command to check progress.
 Use `--no-start` to install only. This needs a published release containing the
 installer; draft assets are unavailable to this public download path.
 

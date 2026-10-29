@@ -95,9 +95,28 @@ elif tool == 'curl':
     shutil.copyfile(source, target(args[args.index('-o') + 1]))
 elif tool == 'sudo':
     sys.exit(subprocess.run(args, env=dict(os.environ, FAKE_UID='0')).returncode)
+elif tool == 'timeout':
+    assert args[:2] == ['-k', '1s']
+    if os.environ.get('LOGIN_TIMEOUT') and args[2] == '30s':
+        sys.exit(124)
+    sys.exit(subprocess.run(args[3:]).returncode)
+elif tool == 'sleep':
+    pass
+elif tool == 'journalctl':
+    assert '_SYSTEMD_UNIT=tailhop.service' in args
+    assert '_SYSTEMD_INVOCATION_ID=' + 'a' * 32 in args
+    count_path = root / 'journal-count'
+    count = int(count_path.read_text()) if count_path.exists() else 0
+    count_path.write_text(str(count + 1))
+    if count >= int(os.environ.get('LOGIN_DELAY_POLLS', '0')):
+        print(os.environ.get('STARTUP_LOGS', '{"msg":"tsnet","message":"AuthLoop: state is Running; done"}'))
+    else:
+        print(os.environ.get('EARLY_STARTUP_LOGS', ''))
 elif tool == 'systemctl':
     if os.environ.get('FAIL_RESTART') and args[0] == 'restart':
         sys.exit(1)
+    if args[0] == 'show' and '--property=InvocationID' in args:
+        print(os.environ.get('INVOCATION_ID', 'a' * 32))
 else:
     sys.exit('Unexpected fake tool: ' + tool)
 '''
@@ -122,7 +141,8 @@ class InstallerTests(unittest.TestCase):
         tools = self.root / 'tools'
         tools.mkdir()
         for name in ('uname', 'id', 'getent', 'groupadd', 'useradd', 'install',
-                     'mktemp', 'mv', 'rm', 'systemctl', 'nologin', 'curl', 'sudo'):
+                     'mktemp', 'mv', 'rm', 'systemctl', 'nologin', 'curl', 'sudo',
+                     'journalctl', 'timeout', 'sleep'):
             path = tools / name
             path.write_text(FAKE_TOOL)
             path.chmod(0o755)
@@ -172,6 +192,8 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(len(self.calls('useradd')), 1)
         self.assertFalse(any(call[0] in ('enable', 'restart', 'start', 'stop')
                              for call in self.calls('systemctl')))
+        self.assertEqual(self.calls('journalctl'), [])
+        self.assertEqual(self.calls('timeout'), [])
         self.assertFalse(list(self.host.rglob('.tailhop.*')))
 
     def test_default_and_explicit_start_enable_and_restart_after_reload(self):
@@ -179,7 +201,9 @@ class InstallerTests(unittest.TestCase):
             with self.subTest(args=args):
                 result = self.run_installer(*args)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(self.calls('systemctl')[-3:],
+                mutations = [call for call in self.calls('systemctl')
+                             if call[0] in ('daemon-reload', 'enable', 'restart')]
+                self.assertEqual(mutations[-3:],
                                  [['daemon-reload'], ['enable', 'tailhop'], ['restart', 'tailhop']])
 
     def test_preflight_failures_do_not_modify_installation(self):
@@ -235,6 +259,56 @@ class InstallerTests(unittest.TestCase):
 
     def test_service_failure_is_reported(self):
         self.assertNotEqual(self.run_installer('--start', FAIL_RESTART='1').returncode, 0)
+        self.assertEqual(self.calls('journalctl'), [])
+
+    def test_login_url_is_printed_after_delayed_startup(self):
+        self.prepare_release()
+        url = 'https://login.tailscale.com/a/fixture-login'
+        early = json.dumps({'msg': 'proxy listening', 'port': 8080})
+        logs = '\n'.join([
+            json.dumps({'msg': 'request', 'url': 'https://login.tailscale.com/a/unrelated'}),
+            json.dumps({'msg': 'tsnet', 'message': 'To start this tsnet server, go to: ' + url,
+                        'unrelated': 'private value that must not be printed'}),
+        ])
+        result = self.run_streamed(FAKE_UID='1000', STARTUP_LOGS=logs,
+                                   EARLY_STARTUP_LOGS=early, LOGIN_DELAY_POLLS='1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.count(url), 1)
+        self.assertIn('keep it private', result.stdout)
+        self.assertNotIn('/a/unrelated', result.stdout)
+        self.assertNotIn('private value', result.stdout)
+        self.assertEqual(self.calls('sleep'), [['1']])
+        self.assertEqual(len(self.calls('journalctl')), 2)
+        for call in self.calls('journalctl'):
+            self.assertIn('_SYSTEMD_INVOCATION_ID=' + 'a' * 32, call)
+
+    def test_running_state_needs_no_login_url(self):
+        url = 'https://login.tailscale.com/a/already-used'
+        logs = '\n'.join([
+            json.dumps({'msg': 'tsnet', 'message': 'go to: ' + url}),
+            json.dumps({'msg': 'tsnet', 'message': 'AuthLoop: state is Running; done'}),
+        ])
+        result = self.run_installer(STARTUP_LOGS=logs)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('no browser login is needed', result.stdout)
+        self.assertNotIn(url, result.stdout)
+        self.assertEqual(self.calls('sleep'), [])
+
+    def test_login_discovery_timeout_or_journal_failure_is_not_install_failure(self):
+        for env in ({'LOGIN_TIMEOUT': '1'}, {'FAIL_TOOL': 'journalctl'}):
+            with self.subTest(env=env):
+                result = self.run_installer(**env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('sudo journalctl -u tailhop -f', result.stdout)
+                self.assertIn('systemctl status tailhop', result.stdout)
+                self.assertNotIn('no browser login is needed', result.stdout)
+        self.assertTrue(any(call[:3] == ['-k', '1s', '30s'] for call in self.calls('timeout')))
+
+    def test_invalid_invocation_id_never_reads_old_logs(self):
+        result = self.run_installer(INVOCATION_ID='')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('sudo journalctl -u tailhop -f', result.stdout)
+        self.assertEqual(self.calls('journalctl'), [])
 
     def prepare_release(self, arch='amd64', extra=None, replacement=None):
         materials = ['tailhop', 'install.sh', 'LICENSE', 'THIRD_PARTY_NOTICES', 'INSTALL.md',
@@ -274,7 +348,7 @@ class InstallerTests(unittest.TestCase):
                          'https://github.com/omyto/tailhop/releases/download/v0.2.0/tailhop_0.2.0_linux_amd64.tar.gz')
         self.assertEqual(self.calls('sudo')[0][0], 'sh')
         self.assertEqual(self.calls('sudo')[0][-1], '--start')
-        self.assertEqual(self.calls('systemctl')[-1], ['restart', 'tailhop'])
+        self.assertIn(['restart', 'tailhop'], self.calls('systemctl'))
         self.assertFalse(list(self.root.glob('download-*')))
 
     def test_download_and_install_without_python_in_path(self):
@@ -288,7 +362,7 @@ class InstallerTests(unittest.TestCase):
         result = self.run_streamed(FAKE_UID='1000')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.host / 'usr/local/bin/tailhop').read_bytes(), b'new binary')
-        self.assertEqual(self.calls('systemctl')[-1], ['restart', 'tailhop'])
+        self.assertIn(['restart', 'tailhop'], self.calls('systemctl'))
         # Exercise another common POSIX awk implementation when available.
         if busybox := shutil.which('busybox'):
             (tools / 'awk').unlink()

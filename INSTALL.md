@@ -11,11 +11,16 @@ stable release:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh
-sudo journalctl -u tailhop -f
 ```
 
-Open the logged URL in your browser if enrollment is needed. This path requires
-curl, CA certificates, `awk`, GNU `tar`, `gzip`, `sha256sum`, and standard file
+After startup, the installer checks logs from this service start for up to
+30 seconds and prints the login URL as soon as it appears. Open it in your
+browser and keep it private. If Tailscale reports Running, the installer reports
+that no browser login is needed. If the URL is delayed or journal access is
+unavailable, installation still completes and prints the command to follow logs:
+`sudo journalctl -u tailhop -f`. `--no-start` skips this check.
+
+This path requires curl, CA certificates, `awk`, GNU `tar`, `gzip`, `sha256sum`, and standard file
 utilities (`sort`, `cmp`, `mkdir`, `mktemp`, `rm`), plus the systemd/account tools
 described below. No Python is needed. Downloads run as your current user; the
 installer uses sudo for the local installation when you are not root. It does not install missing dependencies.
@@ -156,11 +161,14 @@ From the verified, extracted archive, install and start with one command:
 
 ```sh
 sudo sh ./install.sh
-sudo journalctl -u tailhop -f
 ```
 
-Open the logged login URL in your browser to enroll when needed. No auth key or
-environment file is required. The installer creates the dedicated non-login
+The installer waits up to 30 seconds for the login URL from this service start
+and prints it directly in the terminal. Open it in your browser to enroll when
+needed, and keep it private. An already authenticated node reports Running
+instead. If no URL or Running status is observed, use the printed journal command
+to check progress; installation still completes. No auth key or environment file
+is required. The installer creates the dedicated non-login
 `tailhop` account, installs the binary, unit, and license materials, reloads
 systemd, enables startup at boot, and starts or restarts the service. It uses only local archive contents;
 it does not download files or install dependencies. Run it on the target Linux

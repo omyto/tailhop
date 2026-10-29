@@ -15,11 +15,57 @@ When piped to sh, download the latest public stable release automatically.
 --start     Enable and start/restart explicitly (the default; kept for compatibility).
 Local installation needs root; downloads use sudo for installation if needed.
 Default: install, enable at boot, and start (or restart) the service.
+After startup, wait up to 30 seconds and print the login URL when needed.
 Existing configuration, systemd drop-ins, and tsnet state are preserved.
 EOF
 }
 
 fail() { printf 'tailhop installer: %s\n' "$1" >&2; exit 1; }
+
+show_login_url() {
+    # Log discovery is best effort; installation must also work without a journal.
+    if command -v journalctl >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1 &&
+        command -v awk >/dev/null 2>&1 && command -v sleep >/dev/null 2>&1; then
+        invocation=$(timeout -k 1s 5s systemctl show tailhop --property=InvocationID --value 2>/dev/null) || invocation=
+        case "$invocation" in
+            *[!0-9a-f]*|'') invocation= ;;
+        esac
+        if [ "${#invocation}" = 32 ]; then
+            printf '%s\n' 'Checking startup logs for a Tailscale login URL (up to 30 seconds)...'
+            if login_result=$(timeout -k 1s 30s sh -s -- "$invocation" <<'WATCH'
+set -eu
+while :; do
+    logs=$(journalctl _SYSTEMD_UNIT=tailhop.service "_SYSTEMD_INVOCATION_ID=$1" --no-pager --quiet --output=cat --lines=100) || exit 1
+    result=$(printf '%s\n' "$logs" | LC_ALL=C awk '
+        /"msg"[[:space:]]*:[[:space:]]*"tsnet"/ {
+            if (match($0, /https:\/\/login[.]tailscale[.]com\/a\/[A-Za-z0-9_-]+/)) {
+                url = substr($0, RSTART, RLENGTH)
+            }
+            if (index($0, "AuthLoop: state is Running; done")) running = 1
+        }
+        END { if (running) print "running"; else if (url != "") print url }
+    ')
+    if [ -n "$result" ]; then
+        printf '%s\n' "$result"
+        exit 0
+    fi
+    sleep 1
+done
+WATCH
+            ); then
+                if [ "$login_result" = running ]; then
+                    printf '%s\n' 'Tailscale reports Running; no browser login is needed.'
+                else
+                    printf '\nOpen this URL in your browser to log in (keep it private):\n%s\n' "$login_result"
+                fi
+                return
+            fi
+        fi
+    fi
+    printf '%s\n' 'No login URL available yet; an enrolled node may not need one.' \
+        'Check service status: systemctl status tailhop' \
+        'Follow enrollment logs: sudo journalctl -u tailhop -f'
+}
 
 download_release() (
     start=$1
@@ -305,7 +351,8 @@ EOF
     if [ "$start" = true ]; then
         systemctl enable tailhop
         systemctl restart tailhop
-        printf '%s\n' 'Service started. Follow enrollment logs: sudo journalctl -u tailhop -f'
+        printf '%s\n' 'Service started.'
+        show_login_url
     else
         printf '%s\n' 'Installed. To enable and start: sudo systemctl enable --now tailhop' \
             'If already running, restart to use the new binary: sudo systemctl restart tailhop'

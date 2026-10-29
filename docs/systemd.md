@@ -2,7 +2,7 @@
 
 The [service unit](../packaging/systemd/tailhop.service) runs the same executable as [Docker](docker.md), on Linux hosts with systemd. Use the bundled `install.sh` on the target host to automate service installation.
 
-For an online installation with curl and Python 3:
+For an online installation with curl and standard Linux utilities:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh -s -- --start
@@ -14,7 +14,8 @@ SHA-256, and installs using sudo when needed. Configuration and state are retain
 It needs a public release containing the installer; drafts are unavailable.
 See [one-command installation](../INSTALL.md#install-with-one-command) for
 prerequisites, version pinning, and installation without starting the service.
-The local archive/source workflow below remains available without Python.
+No Python is needed. The local archive/source workflow below remains available
+without additional downloads.
 
 ## Obtain the executable
 

@@ -70,7 +70,8 @@ On Linux with systemd, install and start the latest public stable release:
 curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh -s -- --start
 ```
 
-Requires curl, Python 3, CA certificates, and root or sudo. The script detects
+Requires curl, CA certificates, standard Linux utilities (`awk`, `tar`,
+`gzip`, `sha256sum`), and root or sudo. No Python is needed. The script detects
 amd64/arm64, verifies the archive against GitHub's asset SHA-256 digest, and
 installs the service while preserving existing configuration and state. Open the
 login URL from `sudo journalctl -u tailhop -f` when enrollment is needed.
@@ -98,7 +99,7 @@ Existing native users of `/var/lib/tailhop` should keep it explicitly with
 Tailhop does not load `.env` files; Compose supplies its environment.
 
 The verified archive also supports `sudo sh ./install.sh --start` without
-additional downloads or Python. See [INSTALL.md](INSTALL.md) for version pinning,
+additional downloads. See [INSTALL.md](INSTALL.md) for version pinning,
 local installation, and upgrades.
 
 ## Use the proxy

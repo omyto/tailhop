@@ -9,7 +9,7 @@ Usage: sh ./install.sh [--download] [--version vX.Y.Z] [--start]
 
 Install the adjacent tailhop payload on Linux with systemd.
 When piped to sh, download the latest public stable release automatically.
---download  Download even when running a saved script (needs curl and Python 3).
+--download  Download even when running a saved script (needs curl and standard Linux tools).
 --version   Download a specific stable release tag instead of latest.
 --start     Enable at boot and start (or restart) after installation.
 Local installation needs root; downloads use sudo for installation if needed.
@@ -23,7 +23,7 @@ fail() { printf 'tailhop installer: %s\n' "$1" >&2; exit 1; }
 download_release() (
     start=$1
     version=$2
-    for tool in curl python3 mktemp rm; do
+    for tool in curl awk tar gzip sha256sum sort cmp mkdir mktemp rm; do
         command -v "$tool" >/dev/null 2>&1 || fail "Required download command is missing: $tool"
     done
     if [ "$(id -u)" != 0 ]; then
@@ -34,11 +34,13 @@ download_release() (
         aarch64|arm64) arch=arm64 ;;
         *) fail 'Only Linux amd64 and arm64 releases are available.' ;;
     esac
-    python3 - "$version" <<'PY'
-import re, sys
-if sys.argv[1] != 'latest' and not re.fullmatch(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', sys.argv[1]):
-    sys.exit('tailhop installer: Expected a stable tag such as v0.1.0.')
-PY
+    case "$version" in
+        latest) ;;
+        *[!v0-9.]*|'') fail 'Expected a stable tag such as v0.1.0.' ;;
+        *) awk -v version="$version" 'BEGIN {
+            exit (version !~ /^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/)
+        }' || fail 'Expected a stable tag such as v0.1.0.' ;;
+    esac
     umask 077
     download_tmp=$(mktemp -d)
     trap 'rm -rf -- "$download_tmp"' EXIT
@@ -52,25 +54,112 @@ PY
     curl -q -fsSL --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 300 \
         --retry 3 -H 'Accept: application/vnd.github+json' -o "$download_tmp/release.json" "$api" ||
         fail 'Cannot read a public release; check connectivity, GitHub rate limits, and release availability.'
-    python3 - "$download_tmp/release.json" "$arch" "$version" > "$download_tmp/asset" <<'PY'
-import json, re, sys
-with open(sys.argv[1]) as source:
-    release = json.load(source)
-tag = release.get('tag_name', '')
-if (release.get('draft') is not False or release.get('prerelease') is not False
-        or not re.fullmatch(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', tag)
-        or (sys.argv[3] != 'latest' and tag != sys.argv[3])):
-    sys.exit('tailhop installer: Expected a published stable release.')
-name = f'tailhop_{tag[1:]}_linux_{sys.argv[2]}.tar.gz'
-assets = [asset for asset in release.get('assets', []) if asset.get('name') == name]
-if len(assets) != 1 or assets[0].get('state') != 'uploaded':
-    sys.exit('tailhop installer: Release has no unique uploaded archive for this architecture.')
-digest = assets[0].get('digest') or ''
-if not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
-    sys.exit('tailhop installer: Missing GitHub asset SHA-256 digest; refusing installation.')
-print(f'https://github.com/omyto/tailhop/releases/download/{tag}/{name}')
-print(digest[7:])
-PY
+    # Parse JSON structure rather than matching text inside descriptions or other
+    # assets. Escaped object keys are rejected; GitHub uses plain ASCII keys.
+    LC_ALL=C awk -v arch="$arch" -v version="$version" '
+    function bad() { exit 1 }
+    function space() { while (substr(json, pos, 1) ~ /^[ \t\r\n]$/) pos++ }
+    function string(    out, c, escape, hex) {
+        if (substr(json, pos++, 1) != "\"") bad()
+        while (pos <= length(json)) {
+            c = substr(json, pos++, 1)
+            if (c == "\"") return out
+            if (c ~ /[[:cntrl:]]/) bad()
+            if (c == "\\") {
+                escape = substr(json, pos++, 1)
+                if (escape == "u") {
+                    hex = substr(json, pos, 4)
+                    if (length(hex) != 4 || hex ~ /[^0-9a-fA-F]/) bad()
+                    pos += 4
+                    c = c escape hex
+                } else {
+                    if (escape !~ /^["\\\/bfnrt]$/) bad()
+                    c = c escape
+                }
+            }
+            out = out c
+        }
+        bad()
+    }
+    function save(path, type, token,    parts, n) {
+        if (path == SUBSEP "tag_name") {
+            if (type != "string") bad()
+            tag = token
+        } else if (path == SUBSEP "draft" || path == SUBSEP "prerelease") {
+            if (type != "literal" || token != "false") bad()
+            flags++
+        } else {
+            n = split(path, parts, SUBSEP)
+            if (n == 4 && parts[2] == "assets") {
+                if (parts[4] == "name" || parts[4] == "state" || parts[4] == "digest") {
+                    if (type != "string") bad()
+                    asset[parts[3], parts[4]] = token
+                }
+            }
+        }
+    }
+    function value(path, depth,    c, key, token, i) {
+        if (depth > 64) bad()
+        space()
+        c = substr(json, pos, 1)
+        if (path == "" && c != "{") bad()
+        if (path == SUBSEP "assets" && c != "[") bad()
+        if (path ~ /^\034assets\034[0-9]+$/ && c != "{") bad()
+        if (c == "{") {
+            pos++; space()
+            if (substr(json, pos, 1) == "}") { pos++; return }
+            do {
+                space(); key = string()
+                if (index(key, "\\") || seen[path SUBSEP key]++) bad()
+                space()
+                if (substr(json, pos++, 1) != ":") bad()
+                value(path SUBSEP key, depth + 1); space()
+                c = substr(json, pos++, 1)
+            } while (c == ",")
+            if (c != "}") bad()
+        } else if (c == "[") {
+            pos++; space()
+            if (substr(json, pos, 1) == "]") { pos++; return }
+            do {
+                i++
+                value(path SUBSEP i, depth + 1); space()
+                c = substr(json, pos++, 1)
+            } while (c == ",")
+            if (c != "]") bad()
+            if (path == SUBSEP "assets") assets = i
+        } else if (c == "\"") {
+            save(path, "string", string())
+        } else {
+            token = substr(json, pos)
+            if (match(token, /^(true|false|null)/)) {
+                token = substr(token, 1, RLENGTH)
+                save(path, "literal", token)
+            } else if (match(token, /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/)) {
+                token = substr(token, 1, RLENGTH)
+                save(path, "number", token)
+            } else bad()
+            pos += length(token)
+        }
+    }
+    { json = json $0 "\n" }
+    END {
+        pos = 1
+        value("", 0); space()
+        if (pos <= length(json) || flags != 2 || tag !~ /^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/) bad()
+        if (version != "latest" && tag != version) bad()
+        name = "tailhop_" substr(tag, 2) "_linux_" arch ".tar.gz"
+        for (i = 1; i <= assets; i++) {
+            if (asset[i, "name"] == name) {
+                matches++
+                if (asset[i, "state"] != "uploaded") bad()
+                digest = asset[i, "digest"]
+            }
+        }
+        if (matches != 1 || length(digest) != 71 || digest !~ /^sha256:[0-9a-f]+$/) bad()
+        print "https://github.com/omyto/tailhop/releases/download/" tag "/" name
+        print substr(digest, 8)
+    }' "$download_tmp/release.json" > "$download_tmp/asset" ||
+        fail 'Invalid release metadata, unavailable archive, or missing GitHub SHA-256 digest; refusing installation.'
     {
         IFS= read -r asset_url
         IFS= read -r expected_digest
@@ -78,31 +167,26 @@ PY
     printf 'Downloading %s\n' "$asset_url"
     curl -q -fsSL --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 300 \
         --retry 3 -o "$download_tmp/archive.tar.gz" "$asset_url" || fail 'Archive download failed.'
-    python3 - "$download_tmp" "$expected_digest" <<'PY'
-import hashlib, pathlib, shutil, sys, tarfile
-work = pathlib.Path(sys.argv[1])
-archive = work / 'archive.tar.gz'
-digest = hashlib.sha256()
-with archive.open('rb') as source:
-    for chunk in iter(lambda: source.read(1024 * 1024), b''):
-        digest.update(chunk)
-if digest.hexdigest() != sys.argv[2]:
-    sys.exit('tailhop installer: Archive SHA-256 mismatch; refusing installation.')
-required = {'tailhop', 'install.sh', 'LICENSE', 'THIRD_PARTY_NOTICES', 'INSTALL.md',
-            'packaging/systemd/tailhop.service', 'packaging/systemd/tailhop.env.example'}
-with tarfile.open(archive, 'r:gz') as payload:
-    members = payload.getmembers()
-    if (len(members) != len(required) or {m.name for m in members} != required
-            or any(not m.isfile() for m in members)):
-        sys.exit('tailhop installer: Unexpected archive layout or unsafe entry; refusing installation.')
-    # Copy only known regular files into a private directory; never extract links.
-    for member in members:
-        target = work / 'payload' / member.name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with payload.extractfile(member) as source, target.open('wb') as destination:
-            shutil.copyfileobj(source, destination)
-        target.chmod(0o755 if member.name in ('tailhop', 'install.sh') else 0o644)
-PY
+    actual_digest=$(sha256sum "$download_tmp/archive.tar.gz")
+    [ "${actual_digest%% *}" = "$expected_digest" ] || fail 'Archive SHA-256 mismatch; refusing installation.'
+    # Check all names and entry types before extracting into a private directory.
+    LC_ALL=C tar -tzf "$download_tmp/archive.tar.gz" > "$download_tmp/names" || fail 'Cannot list archive.'
+    LC_ALL=C sort "$download_tmp/names" > "$download_tmp/actual"
+    LC_ALL=C sort > "$download_tmp/expected" <<'EOF'
+tailhop
+install.sh
+LICENSE
+THIRD_PARTY_NOTICES
+INSTALL.md
+packaging/systemd/tailhop.service
+packaging/systemd/tailhop.env.example
+EOF
+    cmp -s "$download_tmp/actual" "$download_tmp/expected" || fail 'Unexpected archive layout; refusing installation.'
+    LC_ALL=C tar -tvzf "$download_tmp/archive.tar.gz" > "$download_tmp/types" || fail 'Cannot inspect archive.'
+    awk 'substr($0, 1, 1) != "-" { bad = 1 } END { exit (bad || NR != 7) }' "$download_tmp/types" ||
+        fail 'Unexpected archive layout or unsafe entry; refusing installation.'
+    mkdir "$download_tmp/payload"
+    tar -xzf "$download_tmp/archive.tar.gz" --no-same-owner --no-same-permissions -C "$download_tmp/payload"
     set --
     [ "$start" = false ] || set -- --start
     if [ "$(id -u)" = 0 ]; then

@@ -234,12 +234,15 @@ class InstallerTests(unittest.TestCase):
     def test_service_failure_is_reported(self):
         self.assertNotEqual(self.run_installer('--start', FAIL_RESTART='1').returncode, 0)
 
-    def prepare_release(self, arch='amd64', extra=None):
+    def prepare_release(self, arch='amd64', extra=None, replacement=None):
         materials = ['tailhop', 'install.sh', 'LICENSE', 'THIRD_PARTY_NOTICES', 'INSTALL.md',
                      'packaging/systemd/tailhop.service', 'packaging/systemd/tailhop.env.example']
         archive = self.root / 'release.tar.gz'
         with tarfile.open(archive, 'w:gz') as payload:
             for name in materials:
+                if replacement is not None and replacement.name == name:
+                    payload.addfile(replacement)
+                    continue
                 source = self.payload / name if (self.payload / name).exists() else ROOT / name
                 payload.add(source, arcname=name, recursive=False)
             if extra is not None:
@@ -271,6 +274,25 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(self.calls('sudo')[0][-1], '--start')
         self.assertEqual(self.calls('systemctl')[-1], ['restart', 'tailhop'])
         self.assertFalse(list(self.root.glob('download-*')))
+
+    def test_download_and_install_without_python_in_path(self):
+        self.prepare_release()
+        tools = self.root / 'tools'
+        for name in ('sh', 'awk', 'tar', 'gzip', 'sha256sum', 'sort', 'cmp', 'mkdir', 'cat', 'dirname'):
+            (tools / name).symlink_to(shutil.which(name))
+        self.env['PATH'] = str(tools)
+        for name in ('python', 'python3', 'jq'):
+            self.assertIsNone(shutil.which(name, path=self.env['PATH']))
+        result = self.run_streamed('--start', FAKE_UID='1000')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.host / 'usr/local/bin/tailhop').read_bytes(), b'new binary')
+        self.assertEqual(self.calls('systemctl')[-1], ['restart', 'tailhop'])
+        # Exercise another common POSIX awk implementation when available.
+        if busybox := shutil.which('busybox'):
+            (tools / 'awk').unlink()
+            (tools / 'awk').symlink_to(busybox)
+            result = self.run_streamed('--start', FAKE_UID='1000')
+            self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_saved_script_download_pinned_arm64_release_without_start(self):
         self.prepare_release(arch='arm64')
@@ -312,6 +334,9 @@ class InstallerTests(unittest.TestCase):
             lambda r: r['assets'][0].update(digest=None),
             lambda r: r['assets'][0].update(digest='sha256:invalid'),
             lambda r: r['assets'][0].update(state='new'),
+            lambda r: r.update(draft='false'),
+            lambda r: r.update(prerelease=None),
+            lambda r: r.update(assets={'1': r['assets'][0]}),
         ]
         for mutate in mutations:
             with self.subTest(mutate=mutate):
@@ -322,6 +347,36 @@ class InstallerTests(unittest.TestCase):
                 self.assertEqual(list(self.host.iterdir()), [])
                 self.assertEqual(self.calls('sudo'), [])
                 self.assertFalse(list(self.root.glob('download-*')))
+
+    def test_metadata_structure_and_string_escapes(self):
+        self.prepare_release()
+        self.release['body'] = 'Text: "draft": true, {"digest": "sha256:wrong"} \\ \n \t café'
+        self.release['unused'] = [None, True, False, -1.5e10, {'nested': [1, 'a/b']}]
+        self.release['assets'].insert(0, dict(name='different-asset', state='uploaded',
+                                             digest='sha256:' + '0' * 64))
+        for indent in (None, 2):
+            with self.subTest(indent=indent):
+                (self.root / 'release.json').write_text(json.dumps(self.release, indent=indent, ensure_ascii=False))
+                result = self.run_streamed()
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_malformed_and_duplicate_json_cannot_install(self):
+        self.prepare_release()
+        valid = json.dumps(self.release)
+        invalid = [valid[:-1], valid + ' trailing', valid[:-1] + ',}',
+                   valid.replace('"draft": false', '"draft": false, "draft": true'),
+                   valid.replace('"draft": false', '"draft": false, "draft": false'),
+                   valid.replace('"draft":', '"dra\\u0066t":'),
+                   valid.replace('"draft": false', '"draft": falsex'),
+                   valid[:-1] + ', "unused": "bad\\q"}',
+                   valid[:-1] + ', "unused": 01}',
+                   valid[:-1] + ', "unused": ' + '[' * 70 + '0' + ']' * 70 + '}']
+        for metadata in invalid:
+            with self.subTest(metadata=metadata):
+                (self.root / 'release.json').write_text(metadata)
+                self.assertNotEqual(self.run_streamed('--start').returncode, 0)
+                self.assertEqual(list(self.host.iterdir()), [])
+                self.assertEqual(self.calls('sudo'), [])
 
     def test_archive_links_extra_files_and_traversal_cannot_install(self):
         link = tarfile.TarInfo('link')
@@ -334,6 +389,19 @@ class InstallerTests(unittest.TestCase):
                 self.assertIn('Unexpected archive layout', result.stderr)
                 self.assertEqual(list(self.host.iterdir()), [])
                 self.assertFalse((self.root / 'escaped').exists())
+
+    def test_archive_special_entries_under_expected_names_cannot_install(self):
+        for kind in (tarfile.SYMTYPE, tarfile.LNKTYPE, tarfile.FIFOTYPE, tarfile.CHRTYPE):
+            with self.subTest(kind=kind):
+                replacement = tarfile.TarInfo('install.sh')
+                replacement.type = kind
+                replacement.linkname = 'tailhop'
+                self.prepare_release(replacement=replacement)
+                result = self.run_streamed('--start')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Unexpected archive layout', result.stderr)
+                self.assertEqual(list(self.host.iterdir()), [])
+                self.assertEqual(self.calls('sudo'), [])
 
     def test_download_failures_do_not_install(self):
         self.prepare_release()

@@ -15,9 +15,10 @@ sudo journalctl -u tailhop -f
 ```
 
 Open the logged URL in your browser if enrollment is needed. This path requires
-curl, Python 3, CA certificates, and the systemd/account/file utilities described
-below. Downloads run as your current user; the installer uses sudo for the local
-installation when you are not root. It does not install missing dependencies.
+curl, CA certificates, `awk`, GNU `tar`, `gzip`, `sha256sum`, and standard file
+utilities (`sort`, `cmp`, `mkdir`, `mktemp`, `rm`), plus the systemd/account tools
+described below. No Python is needed. Downloads run as your current user; the
+installer uses sudo for the local installation when you are not root. It does not install missing dependencies.
 Only amd64 (`x86_64`) and arm64 (`aarch64`) are supported.
 
 The script selects the archive from GitHub's release API, checks its SHA-256
@@ -46,8 +47,8 @@ restarts the service. License materials are installed in
 `/usr/local/share/doc/tailhop`. The private temporary download directory is
 removed on success or failure.
 
-For installation without additional downloads or Python, use the verified
-archive and local steps below.
+For installation without additional downloads, use the verified archive and
+local steps below.
 
 ## Extract and verify
 

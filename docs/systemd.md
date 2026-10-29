@@ -2,6 +2,20 @@
 
 The [service unit](../packaging/systemd/tailhop.service) runs the same executable as [Docker](docker.md), on Linux hosts with systemd. Use the bundled `install.sh` on the target host to automate service installation.
 
+For an online installation with curl and Python 3:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh -s -- --start
+sudo journalctl -u tailhop -f
+```
+
+This selects a published stable amd64/arm64 release, verifies its GitHub asset
+SHA-256, and installs using sudo when needed. Configuration and state are retained.
+It needs a public release containing the installer; drafts are unavailable.
+See [one-command installation](../INSTALL.md#install-with-one-command) for
+prerequisites, version pinning, and installation without starting the service.
+The local archive/source workflow below remains available without Python.
+
 ## Obtain the executable
 
 Obtain prebuilt Linux archives from [GitHub Releases](https://github.com/omyto/tailhop/releases).
@@ -177,7 +191,7 @@ sudo rm -f /etc/systemd/system/tailhop.service /usr/local/bin/tailhop
 sudo systemctl daemon-reload
 ```
 
-These commands preserve /var/lib/tailhop, /etc/tailhop, and the service account. Removing persisted tsnet state may require enrollment again and create a new node identity. Native service packaging here supports Linux with systemd.
+These commands preserve /var/lib/tailhop, /etc/tailhop, license materials, and the service account. Removing persisted tsnet state may require enrollment again and create a new node identity. Native service packaging here supports Linux with systemd.
 
 ## Manual service verification
 

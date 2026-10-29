@@ -64,7 +64,21 @@ configuration, Compose, upgrades, and source development.
 
 ## Run the Linux binary
 
-Download the matching Linux archive from [GitHub Releases](https://github.com/omyto/tailhop/releases),
+On Linux with systemd, install and start the latest public stable release:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh -s -- --start
+```
+
+Requires curl, Python 3, CA certificates, and root or sudo. The script detects
+amd64/arm64, verifies the archive against GitHub's asset SHA-256 digest, and
+installs the service while preserving existing configuration and state. Open the
+login URL from `sudo journalctl -u tailhop -f` when enrollment is needed.
+Omit `--start` to install only. This needs a published release containing the
+installer; draft assets are unavailable to this public download path.
+
+For direct execution or an offline installation, download the matching Linux
+archive from [GitHub Releases](https://github.com/omyto/tailhop/releases),
 verify it as described in [INSTALL.md](INSTALL.md), then extract it and run:
 
 ```bash
@@ -83,16 +97,9 @@ Existing native users of `/var/lib/tailhop` should keep it explicitly with
 `--state-dir /var/lib/tailhop`; state is never migrated automatically.
 Tailhop does not load `.env` files; Compose supplies its environment.
 
-To install as a systemd service, run from the verified, extracted archive:
-
-```sh
-sudo sh ./install.sh --start
-sudo journalctl -u tailhop -f
-```
-
-The installer creates the service account and installs, enables, and starts the
-service. Open the logged URL to enroll. Omit `--start` to install only; existing
-configuration and state are preserved. See [INSTALL.md](INSTALL.md#install-as-a-systemd-service).
+The verified archive also supports `sudo sh ./install.sh --start` without
+additional downloads or Python. See [INSTALL.md](INSTALL.md) for version pinning,
+local installation, and upgrades.
 
 ## Use the proxy
 

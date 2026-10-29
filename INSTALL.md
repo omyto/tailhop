@@ -4,6 +4,51 @@ Use the archive for your Linux machine: `uname -m` reports `x86_64` for amd64 or
 `aarch64` for arm64. You need CA certificates and outbound internet connectivity.
 No Go, Git, Docker, TUN device, or separate tailscaled process is required.
 
+## Install with one command
+
+On Linux with systemd, download, verify, install, and start the latest public
+stable release:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh -s -- --start
+sudo journalctl -u tailhop -f
+```
+
+Open the logged URL in your browser if enrollment is needed. This path requires
+curl, Python 3, CA certificates, and the systemd/account/file utilities described
+below. Downloads run as your current user; the installer uses sudo for the local
+installation when you are not root. It does not install missing dependencies.
+Only amd64 (`x86_64`) and arm64 (`aarch64`) are supported.
+
+The script selects the archive from GitHub's release API, checks its SHA-256
+against the asset's GitHub digest **before extracting or executing anything in
+it**, and invokes the installer bundled in that verified archive. Missing or
+mismatched digests, unexpected archive contents, and download errors stop the
+installation. A public repository and a published stable release containing the
+installer are required; draft releases and prereleases are rejected. GitHub API
+rate limits can cause a download to fail. The command trusts the installer from
+`main`, GitHub release metadata, and the release publisher.
+
+To pin a version, replace this example with an existing stable release tag:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh -s -- --version v0.2.0 --start
+```
+
+Omit `--start` to install without starting, stopping, or enabling the service;
+use this before configuring enrollment or migrating a direct-execution identity.
+When running a saved script, add `--download` to use the online path:
+`sh ./install.sh --download --start`. `--version` also selects the download path.
+With no download option, a script run from a file uses its adjacent payload.
+Repeat the online command to upgrade; configuration, systemd drop-ins, and state
+are preserved. The main service unit is replaced and `--start` enables and
+restarts the service. License materials are installed in
+`/usr/local/share/doc/tailhop`. The private temporary download directory is
+removed on success or failure.
+
+For installation without additional downloads or Python, use the verified
+archive and local steps below.
+
 ## Extract and verify
 
 Download the matching architecture archive from the official
@@ -110,8 +155,8 @@ sudo journalctl -u tailhop -f
 
 Open the logged login URL in your browser to enroll when needed. No auth key or
 environment file is required. The installer creates the dedicated non-login
-`tailhop` account, installs the binary and unit, reloads systemd, enables startup
-at boot, and starts or restarts the service. It uses only local archive contents;
+`tailhop` account, installs the binary, unit, and license materials, reloads
+systemd, enables startup at boot, and starts or restarts the service. It uses only local archive contents;
 it does not download files or install dependencies. Run it on the target Linux
 host with a running systemd system manager and the `getent`, `groupadd`, `useradd`,
 and standard file utilities available. It rejects an incompatible existing
@@ -381,5 +426,5 @@ sudo rm -f /etc/systemd/system/tailhop.service /usr/local/bin/tailhop
 sudo systemctl daemon-reload
 ```
 
-These commands intentionally retain configuration, state, and the service
-account. Removing state can require enrollment again and create a new identity.
+These commands intentionally retain configuration, state, license materials,
+and the service account. Removing state can require enrollment again and create a new identity.

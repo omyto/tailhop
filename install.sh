@@ -4,16 +4,17 @@ set -eu
 
 usage() {
     cat <<'EOF'
-Usage: sh ./install.sh [--download] [--version vX.Y.Z] [--start]
-       curl -fsSL <installer-url> | sh -s -- [--version vX.Y.Z] [--start]
+Usage: sh ./install.sh [--download] [--version vX.Y.Z] [--no-start]
+       curl -fsSL <installer-url> | sh -s -- [--version vX.Y.Z] [--no-start]
 
 Install the adjacent tailhop payload on Linux with systemd.
 When piped to sh, download the latest public stable release automatically.
 --download  Download even when running a saved script (needs curl and standard Linux tools).
 --version   Download a specific stable release tag instead of latest.
---start     Enable at boot and start (or restart) after installation.
+--no-start  Install only; do not start, stop, or enable the service.
+--start     Enable and start/restart explicitly (the default; kept for compatibility).
 Local installation needs root; downloads use sudo for installation if needed.
-Default: install only; do not start, stop, or enable the service.
+Default: install, enable at boot, and start (or restart) the service.
 Existing configuration, systemd drop-ins, and tsnet state are preserved.
 EOF
 }
@@ -187,8 +188,12 @@ EOF
         fail 'Unexpected archive layout or unsafe entry; refusing installation.'
     mkdir "$download_tmp/payload"
     tar -xzf "$download_tmp/archive.tar.gz" --no-same-owner --no-same-permissions -C "$download_tmp/payload"
-    set --
-    [ "$start" = false ] || set -- --start
+    # Pass the choice explicitly to the release-bundled installer.
+    if [ "$start" = true ]; then
+        set -- --start
+    else
+        set -- --no-start
+    fi
     if [ "$(id -u)" = 0 ]; then
         sh "$download_tmp/payload/install.sh" "$@"
     else
@@ -197,12 +202,13 @@ EOF
 )
 
 main() {
-    start=false
+    start=true
     download=false
     version=latest
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --start) start=true ;;
+            --no-start) start=false ;;
             --download) download=true ;;
             --version)
                 [ "$#" -ge 2 ] || fail '--version requires a stable tag such as v0.1.0.'

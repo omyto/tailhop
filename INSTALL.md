@@ -10,7 +10,7 @@ On Linux with systemd, download, verify, install, and start the latest public
 stable release:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh -s -- --start
+curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh
 sudo journalctl -u tailhop -f
 ```
 
@@ -33,17 +33,22 @@ rate limits can cause a download to fail. The command trusts the installer from
 To pin a version, replace this example with an existing stable release tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh -s -- --version v0.2.0 --start
+curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh -s -- --version v0.2.0
 ```
 
-Omit `--start` to install without starting, stopping, or enabling the service;
-use this before configuring enrollment or migrating a direct-execution identity.
+Use `--no-start` to install without starting, stopping, or enabling the service:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh -s -- --no-start
+```
+
+Use this before configuring enrollment or migrating a direct-execution identity.
 When running a saved script, add `--download` to use the online path:
-`sh ./install.sh --download --start`. `--version` also selects the download path.
+`sh ./install.sh --download`. `--version` also selects the download path.
 With no download option, a script run from a file uses its adjacent payload.
 Repeat the online command to upgrade; configuration, systemd drop-ins, and state
-are preserved. The main service unit is replaced and `--start` enables and
-restarts the service. License materials are installed in
+are preserved. The main service unit is replaced; by default the installer
+enables and restarts the service. License materials are installed in
 `/usr/local/share/doc/tailhop`. The private temporary download directory is
 removed on success or failure.
 
@@ -143,14 +148,14 @@ Docker and the packaged systemd service continue using `/var/lib/tailhop`.
 
 ## Install as a systemd service
 
-Already running directly? Install without `--start`, then follow
+Already running directly? Install with `--no-start`, then follow
 [Migrate from direct execution to systemd](#migrate-from-direct-execution-to-systemd)
 before starting the service to preserve that node identity.
 
 From the verified, extracted archive, install and start with one command:
 
 ```sh
-sudo sh ./install.sh --start
+sudo sh ./install.sh
 sudo journalctl -u tailhop -f
 ```
 
@@ -166,14 +171,14 @@ and standard file utilities available. It rejects an incompatible existing
 To install without starting, stopping, or enabling the service:
 
 ```sh
-sudo sh ./install.sh
+sudo sh ./install.sh --no-start
 ```
 
 Use this mode before configuring automated enrollment or migrating state from
 direct execution. Existing `/etc/tailhop/tailhop.env`, systemd drop-ins, and
 `/var/lib/tailhop` are preserved. The bundled main unit is replaced; keep local
 unit customizations in drop-ins. A running process continues using its old binary
-until restarted. `--start` also enables a previously disabled service.
+until restarted. Default installation also enables a previously disabled service.
 
 At startup, `StateDirectory=tailhop` creates and owns `/var/lib/tailhop` as
 `tailhop:tailhop` with mode 0700. State persists across restarts and binary updates.
@@ -184,7 +189,7 @@ before starting the service.
 
 ### Start and enroll interactively
 
-If you installed without `--start`, enable and start when ready:
+If you installed with `--no-start`, enable and start when ready:
 
 ```sh
 sudo systemctl enable --now tailhop
@@ -256,10 +261,10 @@ is unset or relative). The service always uses `/var/lib/tailhop`.
 
 First record the existing device identity and Tailnet IP in the Tailscale admin
 console, plus the hostname, port, and other settings used by the direct process.
-Prepare the dedicated account, binary, and unit using
-[Install as a systemd service](#install-as-a-systemd-service), but **do not run
-`enable --now` or start the service yet**. Skip enrollment-key setup when reusing
-state. If an existing environment file contains `TS_AUTHKEY`, remove that
+Prepare the dedicated account, binary, and unit with `sudo sh ./install.sh --no-start`
+as described in [Install as a systemd service](#install-as-a-systemd-service).
+**Do not run `enable --now` or start the service yet**. Skip enrollment-key setup
+when reusing state. If an existing environment file contains `TS_AUTHKEY`, remove that
 assignment with `sudoedit`; do not overwrite an existing environment file.
 
 Stop the direct process with Ctrl-C, or `kill -TERM <pid>` using its known PID.
@@ -406,7 +411,7 @@ For an update, verify the new archive against its GitHub asset digest, then
 extract it into a fresh directory as above. Then, from that directory:
 
 ```sh
-sudo sh ./install.sh --start
+sudo sh ./install.sh
 systemctl status tailhop
 sudo journalctl -u tailhop -n 50 --no-pager
 ```

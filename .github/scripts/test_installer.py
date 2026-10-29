@@ -152,7 +152,7 @@ class InstallerTests(unittest.TestCase):
         old_inode = self.root / 'running-binary'
         os.link(binary, old_inode)
         for _ in range(2):
-            result = self.run_installer()
+            result = self.run_installer('--no-start')
             self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(binary.read_bytes(), b'new binary')
         self.assertEqual(binary.stat().st_mode & 0o777, 0o755)
@@ -174,11 +174,13 @@ class InstallerTests(unittest.TestCase):
                              for call in self.calls('systemctl')))
         self.assertFalse(list(self.host.rglob('.tailhop.*')))
 
-    def test_start_enables_and_restarts_after_reload(self):
-        result = self.run_installer('--start')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.calls('systemctl')[-3:],
-                         [['daemon-reload'], ['enable', 'tailhop'], ['restart', 'tailhop']])
+    def test_default_and_explicit_start_enable_and_restart_after_reload(self):
+        for args in ((), ('--start',)):
+            with self.subTest(args=args):
+                result = self.run_installer(*args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.calls('systemctl')[-3:],
+                                 [['daemon-reload'], ['enable', 'tailhop'], ['restart', 'tailhop']])
 
     def test_preflight_failures_do_not_modify_installation(self):
         for env in ({'FAKE_UID': '1000'}, {'FAKE_OS': 'Darwin'}, {'FAIL_TOOL': 'systemctl'}):
@@ -263,7 +265,7 @@ class InstallerTests(unittest.TestCase):
 
     def test_streamed_latest_download_install_and_sudo(self):
         self.prepare_release()
-        result = self.run_streamed('--start', FAKE_UID='1000')
+        result = self.run_streamed(FAKE_UID='1000')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.host / 'usr/local/bin/tailhop').read_bytes(), b'new binary')
         self.assertEqual(self.calls('curl')[0][-1],
@@ -283,7 +285,7 @@ class InstallerTests(unittest.TestCase):
         self.env['PATH'] = str(tools)
         for name in ('python', 'python3', 'jq'):
             self.assertIsNone(shutil.which(name, path=self.env['PATH']))
-        result = self.run_streamed('--start', FAKE_UID='1000')
+        result = self.run_streamed(FAKE_UID='1000')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.host / 'usr/local/bin/tailhop').read_bytes(), b'new binary')
         self.assertEqual(self.calls('systemctl')[-1], ['restart', 'tailhop'])
@@ -291,17 +293,18 @@ class InstallerTests(unittest.TestCase):
         if busybox := shutil.which('busybox'):
             (tools / 'awk').unlink()
             (tools / 'awk').symlink_to(busybox)
-            result = self.run_streamed('--start', FAKE_UID='1000')
+            result = self.run_streamed(FAKE_UID='1000')
             self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_saved_script_download_pinned_arm64_release_without_start(self):
         self.prepare_release(arch='arm64')
-        result = self.run_installer('--download', '--version', 'v0.2.0', FAKE_ARCH='aarch64')
+        result = self.run_installer('--download', '--version', 'v0.2.0', '--no-start', FAKE_ARCH='aarch64')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.calls('curl')[0][-1],
                          'https://api.github.com/repos/omyto/tailhop/releases/tags/v0.2.0')
         self.assertTrue(self.calls('curl')[1][-1].endswith('_arm64.tar.gz'))
-        self.assertNotIn(['restart', 'tailhop'], self.calls('systemctl'))
+        self.assertFalse(any(call[0] in ('enable', 'restart', 'start', 'stop')
+                             for call in self.calls('systemctl')))
         self.assertEqual(self.calls('sudo'), [])
 
     def test_streamed_shell_path_does_not_select_local_payload(self):

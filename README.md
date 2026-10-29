@@ -67,7 +67,7 @@ configuration, Compose, upgrades, and source development.
 On Linux with systemd, install and start the latest public stable release:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh -s -- --start
+curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh
 ```
 
 Requires curl, CA certificates, standard Linux utilities (`awk`, `tar`,
@@ -75,7 +75,7 @@ Requires curl, CA certificates, standard Linux utilities (`awk`, `tar`,
 amd64/arm64, verifies the archive against GitHub's asset SHA-256 digest, and
 installs the service while preserving existing configuration and state. Open the
 login URL from `sudo journalctl -u tailhop -f` when enrollment is needed.
-Omit `--start` to install only. This needs a published release containing the
+Use `--no-start` to install only. This needs a published release containing the
 installer; draft assets are unavailable to this public download path.
 
 For direct execution or an offline installation, download the matching Linux
@@ -98,7 +98,7 @@ Existing native users of `/var/lib/tailhop` should keep it explicitly with
 `--state-dir /var/lib/tailhop`; state is never migrated automatically.
 Tailhop does not load `.env` files; Compose supplies its environment.
 
-The verified archive also supports `sudo sh ./install.sh --start` without
+The verified archive also supports `sudo sh ./install.sh` without
 additional downloads. See [INSTALL.md](INSTALL.md) for version pinning,
 local installation, and upgrades.
 

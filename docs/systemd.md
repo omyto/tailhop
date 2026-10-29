@@ -5,7 +5,7 @@ The [service unit](../packaging/systemd/tailhop.service) runs the same executabl
 For an online installation with curl and standard Linux utilities:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh -s -- --start
+curl -fsSL https://raw.githubusercontent.com/omyto/tailhop/main/install.sh | sh
 sudo journalctl -u tailhop -f
 ```
 
@@ -81,7 +81,7 @@ Already running the binary directly? Follow [Migrate from direct execution to sy
 From the extracted, verified archive or a checkout with `./tailhop` built:
 
 ```sh
-sudo sh ./install.sh --start
+sudo sh ./install.sh
 sudo journalctl -u tailhop -f
 ```
 
@@ -93,7 +93,7 @@ customizations in drop-ins: the main unit is replaced on installation.
 For automated enrollment or state migration, first install without starting:
 
 ```sh
-sudo sh ./install.sh
+sudo sh ./install.sh --no-start
 ```
 
 Then prepare configuration or migrate state before enabling the service below.
@@ -171,7 +171,7 @@ go build -trimpath -o tailhop ./cmd/tailhop
 From the verified archive or built checkout, install the new payload and restart:
 
 ```sh
-sudo sh ./install.sh --start
+sudo sh ./install.sh
 systemctl status tailhop
 ```
 

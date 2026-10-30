@@ -84,7 +84,7 @@ Use standard Go flags with precedence CLI flags > non-empty environment variable
 | `MAX_CLIENTS` | `100` | Positive integer; global simultaneous inbound TCP connection limit, not per IP. |
 | `IDLE_TIMEOUT` | `10m` | Positive Go duration; HTTP keep-alive, active HTTP forwarding, and shared CONNECT inactivity. |
 
-Use `tsnet.Server.Listen("tcp", fmt.Sprintf(":%d", port))`; don't bind `0.0.0.0` on the Docker host. Do not require `TS_AUTHKEY` on every restart. Document browser login through the logged URL for manual setup, including Docker. Automated deployment may supply `TS_AUTHKEY` for enrollment. Valid persisted state needs neither a new key nor another browser login. Do not set the tsnet node to ephemeral when relying on persisted identity.
+Use `tsnet.Server.Listen("tcp", fmt.Sprintf(":%d", port))`; don't bind `0.0.0.0` on the Docker host. Do not require `TS_AUTHKEY` on every restart. Document browser login through the logged URL for manual setup, including Docker. Startup/enrollment messages and the application readiness event remain visible independently of the configured log level; normal application logs still respect that level, and auth keys remain redacted. Automated deployment may supply `TS_AUTHKEY` for enrollment. Valid persisted state needs neither a new key nor another browser login. Do not set the tsnet node to ephemeral when relying on persisted identity.
 
 ## 6. Reliability, resource usage, and shutdown
 

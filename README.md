@@ -46,6 +46,7 @@ Existing valid state needs neither a new key nor another browser login.
 
    Open the URL in your browser, sign in, and approve the node if required.
    Keep the URL private. Ctrl-C stops following logs, not the container.
+   Startup/enrollment output remains visible even at log level `warn` or `error`.
    A running container or `proxy listening` message alone does not mean the
    node is connected.
 

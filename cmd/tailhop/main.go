@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -38,7 +39,7 @@ func start(cfg config, secrets []string) error {
 	port, maxClients, idle, level := cfg.port, cfg.maxClients, cfg.idle, cfg.level
 	hostname, dir := cfg.hostname, cfg.stateDir
 	var err error
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+	logger, startupLogger := newLoggers(os.Stderr, level)
 	if err := prepareStateDir(dir); err != nil {
 		return err
 	}
@@ -56,7 +57,7 @@ func start(cfg config, secrets []string) error {
 		AuthKey:  cfg.authKey,
 		Logf:     func(string, ...any) {},
 		UserLogf: func(format string, args ...any) {
-			logger.Info("tsnet", "message", redactSecrets(fmt.Sprintf(format, args...), secrets...))
+			startupLogger.Info("tsnet", "message", redactSecrets(fmt.Sprintf(format, args...), secrets...))
 		},
 	}
 	defer node.Close()
@@ -78,7 +79,7 @@ func start(cfg config, secrets []string) error {
 	statusDone := make(chan struct{})
 	go func() {
 		defer close(statusDone)
-		reportRunning(statusCtx, logger, localClient)
+		reportRunning(statusCtx, startupLogger, localClient)
 	}()
 	defer func() {
 		cancelStatus()
@@ -106,6 +107,13 @@ func start(cfg config, secrets []string) error {
 		return fmt.Errorf("proxy listener failed: %w", serveErr)
 	}
 	return nil
+}
+
+func newLoggers(output io.Writer, level slog.Level) (app, startup *slog.Logger) {
+	app = slog.New(slog.NewJSONHandler(output, &slog.HandlerOptions{Level: level}))
+	// Enrollment instructions and readiness must remain visible at warn/error.
+	startup = slog.New(slog.NewJSONHandler(output, nil))
+	return app, startup
 }
 
 // Watch the initial state as well as transitions: persisted nodes may already be

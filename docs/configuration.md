@@ -16,7 +16,7 @@ Unknown flags, positional arguments, and invalid configuration fail with a non-z
 | `--hostname` | `TS_HOSTNAME` | `tailhop` | DNS label: 1–63 ASCII letters, digits, hyphens; no leading/trailing hyphen. |
 | `--port` | `PROXY_PORT` | `8080` | TCP port 1–65535 on the Tailnet; destination ports stay fixed. |
 | `--state-dir` | `TS_STATE_DIR` | XDG/home path below | Non-empty private writable persistent tsnet directory. |
-| `--log-level` | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
+| `--log-level` | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` for application logs; startup/enrollment output remains visible. |
 | `--max-clients` | `MAX_CLIENTS` | `100` | Positive integer; global inbound TCP connection limit. |
 | `--idle-timeout` | `IDLE_TIMEOUT` | `10m` | Positive Go duration such as `30s`, `10m`, `2h`. |
 | `--auth-key` | `TS_AUTHKEY` | empty | Optional initial enrollment/reauthentication key; browser login when no credentials or valid state are available. |
@@ -127,4 +127,11 @@ including the initial state of an already enrolled node. The installer uses this
 application event to recognize readiness; `proxy listening` alone is not readiness.
 The state watcher stops after reporting readiness or when the process shuts down.
 
-Verbose tsnet backend output is suppressed; user status/enrollment messages use structured logging. Tailscale's library also manages its own operational log uploads. An interactive enrollment URL may appear for an uninitialized node without an auth key; treat it as a secret.
+Verbose tsnet backend output is suppressed. User status/enrollment messages and
+the `tailnet ready` event use structured startup logging independently of
+`LOG_LEVEL` / `--log-level`, so `warn` and `error` do not hide browser login
+instructions or readiness from the installer. Ordinary application/request logs
+still respect the configured level. Auth keys are redacted from tsnet user
+messages. Tailscale's library also manages its own operational log uploads.
+An interactive enrollment URL may appear for an uninitialized node without an
+auth key; treat it as a secret.

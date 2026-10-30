@@ -122,3 +122,30 @@ func TestRunningStatusCancellation(t *testing.T) {
 		t.Fatalf("canceled watcher logged readiness or an error: %s", &logs)
 	}
 }
+
+func TestStartupLoggingLevels(t *testing.T) {
+	for _, level := range []slog.Level{slog.LevelDebug, slog.LevelInfo, slog.LevelWarn, slog.LevelError} {
+		t.Run(level.String(), func(t *testing.T) {
+			var logs bytes.Buffer
+			app, startup := newLoggers(&logs, level)
+			app.Info("application info")
+			app.Error("application error")
+			url := "https://login.tailscale.com/a/fixture-login"
+			startup.Info("tsnet", "message", "To start this tsnet server, go to: "+url)
+			client := statusClient(t, func(w http.ResponseWriter, r *http.Request) {
+				state := ipn.Running
+				json.NewEncoder(w).Encode(ipn.Notify{State: &state})
+			})
+			reportRunning(context.Background(), startup, client)
+			got := logs.String()
+			for _, required := range []string{url, `"msg":"tailnet ready","state":"Running"`, "application error"} {
+				if !strings.Contains(got, required) {
+					t.Fatalf("missing %q at level %s: %s", required, level, got)
+				}
+			}
+			if strings.Contains(got, "application info") != (level <= slog.LevelInfo) {
+				t.Fatalf("application level was not respected: %s", got)
+			}
+		})
+	}
+}

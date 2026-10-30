@@ -109,6 +109,8 @@ the home directory. The working directory never determines the default.
 With no key, run `./tailhop`, open the login URL printed in its logs in a browser,
 and complete Tailscale login. Confirm the node in the Tailscale device view and
 approve it if your Tailnet policy requires that. Keep the login URL private.
+Startup/enrollment messages and the Tailnet readiness event remain visible even
+with `--log-level=warn` or `--log-level=error`; application logs use the selected level.
 
 For automation, supply `TS_AUTHKEY` through your deployment environment.
 After enrollment, restart without the key and keep the same state directory.

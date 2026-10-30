@@ -109,7 +109,7 @@ elif tool == 'journalctl':
     count = int(count_path.read_text()) if count_path.exists() else 0
     count_path.write_text(str(count + 1))
     if count >= int(os.environ.get('LOGIN_DELAY_POLLS', '0')):
-        print(os.environ.get('STARTUP_LOGS', '{"msg":"tsnet","message":"AuthLoop: state is Running; done"}'))
+        print(os.environ.get('STARTUP_LOGS', '{"msg":"tailnet ready","state":"Running"}'))
     else:
         print(os.environ.get('EARLY_STARTUP_LOGS', ''))
 elif tool == 'systemctl':
@@ -286,13 +286,26 @@ class InstallerTests(unittest.TestCase):
         url = 'https://login.tailscale.com/a/already-used'
         logs = '\n'.join([
             json.dumps({'msg': 'tsnet', 'message': 'go to: ' + url}),
-            json.dumps({'msg': 'tsnet', 'message': 'AuthLoop: state is Running; done'}),
+            json.dumps({'msg': 'tailnet ready', 'state': 'Running'}),
         ])
         result = self.run_installer(STARTUP_LOGS=logs)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('no browser login is needed', result.stdout, result.stderr)
         self.assertNotIn(url, result.stdout)
         self.assertEqual(self.calls('sleep'), [])
+
+    def test_readiness_waits_for_application_state_event(self):
+        early = '\n'.join([
+            json.dumps({'msg': 'tsnet', 'message': 'AuthLoop: state is Starting; done'}),
+            json.dumps({'msg': 'tsnet', 'message': 'AuthLoop: state is Running; done'}),
+            json.dumps({'msg': 'request', 'state': 'Running'}),
+            json.dumps({'msg': 'tailnet ready', 'state': 'Starting'}),
+        ])
+        result = self.run_installer(EARLY_STARTUP_LOGS=early, LOGIN_DELAY_POLLS='1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('no browser login is needed', result.stdout)
+        self.assertEqual(self.calls('sleep'), [['1']])
+        self.assertEqual(len(self.calls('journalctl')), 2)
 
     def test_login_discovery_timeout_or_journal_failure_is_not_install_failure(self):
         for env in ({'LOGIN_TIMEOUT': '1'}, {'FAIL_TOOL': 'journalctl'}):

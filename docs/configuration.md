@@ -122,4 +122,9 @@ At expiry, outbound HTTP operations are canceled and remaining inbound connectio
 
 Structured application logs include source IP from the tsnet connection, method, validated destination hostname, status, and duration as applicable. Forwarding headers are not trusted for identity, and no per-request WhoIs lookup is used. Request bodies, URL queries, proxy credentials, and sensitive header values are excluded.
 
+The `tailnet ready` event with `state=Running` comes from tsnet's state API,
+including the initial state of an already enrolled node. The installer uses this
+application event to recognize readiness; `proxy listening` alone is not readiness.
+The state watcher stops after reporting readiness or when the process shuts down.
+
 Verbose tsnet backend output is suppressed; user status/enrollment messages use structured logging. Tailscale's library also manages its own operational log uploads. An interactive enrollment URL may appear for an uninitialized node without an auth key; treat it as a secret.

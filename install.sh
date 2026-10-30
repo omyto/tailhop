@@ -41,8 +41,8 @@ while :; do
             if (match($0, /https:\/\/login[.]tailscale[.]com\/a\/[A-Za-z0-9_-]+/)) {
                 url = substr($0, RSTART, RLENGTH)
             }
-            if (index($0, "AuthLoop: state is Running; done")) running = 1
         }
+        /"msg"[[:space:]]*:[[:space:]]*"tailnet ready"/ && /"state"[[:space:]]*:[[:space:]]*"Running"/ { running = 1 }
         END { if (running) print "running"; else if (url != "") print url }
     ')
     if [ -n "$result" ]; then

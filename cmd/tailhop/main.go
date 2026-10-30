@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"tailhop/internal/proxy"
+	"tailscale.com/client/local"
+	"tailscale.com/ipn"
 	"tailscale.com/tsnet"
 )
 
@@ -68,6 +70,20 @@ func start(cfg config, secrets []string) error {
 		return fmt.Errorf("tsnet listener failed: %w", err)
 	}
 	defer listener.Close()
+	localClient, err := node.LocalClient()
+	if err != nil {
+		return fmt.Errorf("tsnet status client failed: %w", err)
+	}
+	statusCtx, cancelStatus := context.WithCancel(ctx)
+	statusDone := make(chan struct{})
+	go func() {
+		defer close(statusDone)
+		reportRunning(statusCtx, logger, localClient)
+	}()
+	defer func() {
+		cancelStatus()
+		<-statusDone
+	}()
 	p := proxy.New(logger, maxClients, idle)
 	server := p.Server()
 	served := make(chan error, 1)
@@ -90,6 +106,30 @@ func start(cfg config, secrets []string) error {
 		return fmt.Errorf("proxy listener failed: %w", serveErr)
 	}
 	return nil
+}
+
+// Watch the initial state as well as transitions: persisted nodes may already be
+// running, while enrollment can pass through several intermediate states.
+func reportRunning(ctx context.Context, logger *slog.Logger, client *local.Client) {
+	watcher, err := client.WatchIPNBus(ctx, ipn.NotifyInitialState)
+	if err == nil {
+		defer watcher.Close()
+		for {
+			var n ipn.Notify
+			n, err = watcher.Next()
+			if err != nil || ctx.Err() != nil {
+				break
+			}
+			if n.State != nil && *n.State == ipn.Running {
+				logger.Info("tailnet ready", "state", "Running")
+				return
+			}
+		}
+	}
+	if ctx.Err() == nil {
+		// Backend errors may contain credentials; keep the failure diagnostic fixed.
+		logger.Warn("tailnet status unavailable")
+	}
 }
 
 func prepareAuth(cfg config) error {

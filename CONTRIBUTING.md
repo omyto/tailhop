@@ -51,6 +51,24 @@ allowed ports, non-public address rejection, IPv4-mapped/scoped aliases, and
 hop-by-hop header removal while preserving end-to-end values. If a failure is
 found, retain its generated `testdata/fuzz/` corpus entry as a regression case.
 
+CI also runs [govulncheck](https://go.dev/doc/security/vuln/) v1.9.0 in separate
+Linux amd64/arm64 jobs with `CGO_ENABLED=0`, matching the release build targets.
+The tool is installed for the runner's architecture before setting the scan's
+target architecture. It is a CI tool, not an application dependency. To check
+the native architecture locally with the required Go toolchain:
+
+```sh
+GOBIN="$PWD/bin" go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+CGO_ENABLED=0 ./bin/govulncheck ./...
+```
+
+The scan needs access to the Go vulnerability database and dependency downloads.
+Default text output fails the job on reachable known vulnerabilities; scanner,
+database, or package-loading errors also fail the job. Review findings and update
+the affected dependency or toolchain deliberately; do not ignore the exit status.
+Results depend on the database and build configuration at scan time, and do not
+replace the proxy's policy tests or deployment checks.
+
 ## Pull requests
 
 Keep each pull request focused. Explain the problem, the resulting behavior, and

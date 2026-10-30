@@ -116,7 +116,7 @@ elif tool == 'systemctl':
     if os.environ.get('FAIL_RESTART') and args[0] == 'restart':
         sys.exit(1)
     if args[0] == 'show' and '--property=InvocationID' in args:
-        print(os.environ.get('INVOCATION_ID', 'a' * 32))
+        print(os.environ.get('INSTALLER_TEST_INVOCATION_ID', 'a' * 32))
 else:
     sys.exit('Unexpected fake tool: ' + tool)
 '''
@@ -273,7 +273,7 @@ class InstallerTests(unittest.TestCase):
         result = self.run_streamed(FAKE_UID='1000', STARTUP_LOGS=logs,
                                    EARLY_STARTUP_LOGS=early, LOGIN_DELAY_POLLS='1')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.count(url), 1)
+        self.assertEqual(result.stdout.count(url), 1, result.stdout + result.stderr)
         self.assertIn('keep it private', result.stdout)
         self.assertNotIn('/a/unrelated', result.stdout)
         self.assertNotIn('private value', result.stdout)
@@ -290,7 +290,7 @@ class InstallerTests(unittest.TestCase):
         ])
         result = self.run_installer(STARTUP_LOGS=logs)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('no browser login is needed', result.stdout)
+        self.assertIn('no browser login is needed', result.stdout, result.stderr)
         self.assertNotIn(url, result.stdout)
         self.assertEqual(self.calls('sleep'), [])
 
@@ -305,10 +305,21 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(any(call[:3] == ['-k', '1s', '30s'] for call in self.calls('timeout')))
 
     def test_invalid_invocation_id_never_reads_old_logs(self):
-        result = self.run_installer(INVOCATION_ID='')
+        result = self.run_installer(INSTALLER_TEST_INVOCATION_ID='')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('sudo journalctl -u tailhop -f', result.stdout)
         self.assertEqual(self.calls('journalctl'), [])
+
+    def test_runner_invocation_id_does_not_override_service_fixture(self):
+        # CI runners launched by systemd can inherit this real environment key.
+        url = 'https://login.tailscale.com/a/fixture-login'
+        logs = json.dumps({'msg': 'tsnet', 'message': 'go to: ' + url})
+        result = self.run_installer(INVOCATION_ID='b' * 32, STARTUP_LOGS=logs)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.count(url), 1, result.stdout + result.stderr)
+        self.assertEqual(result.stderr, '')
+        self.assertEqual(len(self.calls('journalctl')), 1)
+        self.assertIn('_SYSTEMD_INVOCATION_ID=' + 'a' * 32, self.calls('journalctl')[0])
 
     def prepare_release(self, arch='amd64', extra=None, replacement=None):
         materials = ['tailhop', 'install.sh', 'LICENSE', 'THIRD_PARTY_NOTICES', 'INSTALL.md',

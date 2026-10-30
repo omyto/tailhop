@@ -11,6 +11,13 @@ environment variables use defaults. `./tailhop --help` (or `-h`) exits successfu
 without validating environment configuration, creating directories, or starting tsnet.
 Unknown flags, positional arguments, and invalid configuration fail with a non-zero exit.
 
+`./tailhop --version` prints the version, source commit and Go toolchain, then
+exits successfully without reading environment configuration, creating state or
+starting tsnet. Release binaries and images embed the validated version/commit.
+Local source builds report `dev`, with an embedded VCS revision when available
+and `-dirty` for modified source, otherwise `unknown`. Unstamped Docker builds
+report `dev` and `unknown`; builders can supply `VERSION` and `COMMIT` build args.
+
 | CLI flag | Environment variable | Default | Accepted values / meaning |
 | --- | --- | --- | --- |
 | `--hostname` | `TS_HOSTNAME` | `tailhop` | DNS label: 1–63 ASCII letters, digits, hyphens; no leading/trailing hyphen. |

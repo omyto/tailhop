@@ -72,7 +72,7 @@ The scope is public-internet egress only. Do not introduce a private-subnet allo
 
 ## 5. Configuration
 
-Use standard Go flags with precedence CLI flags > non-empty environment variables > defaults. Support optional --auth-key with TS_AUTHKEY fallback; do not parse configuration files or dotenv. Validate configuration early; report useful errors without exposing secrets. Help must exit without startup side effects. See [configuration reference](docs/configuration.md) for flags and accepted values.
+Use standard Go flags with precedence CLI flags > non-empty environment variables > defaults. Support optional --auth-key with TS_AUTHKEY fallback; do not parse configuration files or dotenv. Validate configuration early; report useful errors without exposing secrets. Help and `--version` must exit without startup side effects or environment validation. `--version` prints the version, source commit and actual Go toolchain; release builds stamp the validated tag and commit. Unstamped builds report `dev` and embedded VCS information when available, otherwise `unknown`. See [configuration reference](docs/configuration.md) for flags and accepted values.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |

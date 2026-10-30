@@ -45,8 +45,11 @@ class DistributionTests(unittest.TestCase):
             tools.mkdir()
             go = tools / 'go'
             go.write_text('''#!/usr/bin/env python3
-import os, pathlib, sys
+import os, pathlib, shlex, sys
 if sys.argv[1] == 'build':
+    flags = shlex.split(next(arg.split('=', 1)[1] for arg in sys.argv if arg.startswith('-ldflags=')))
+    definitions = [flags[i + 1] for i, flag in enumerate(flags) if flag == '-X']
+    assert definitions == ['main.version=v' + os.environ['VERSION'], 'main.commit=' + os.environ['SOURCE_COMMIT']]
     pathlib.Path(sys.argv[sys.argv.index('-o') + 1]).write_text('fixture-' + os.environ['GOARCH'])
 elif sys.argv[1:3] == ['version', '-m']:
     arch = pathlib.Path(sys.argv[3]).read_text().removeprefix('fixture-')
@@ -56,7 +59,8 @@ else:
 ''')
             go.chmod(0o755)
             env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
-                       RUNNER_TEMP=tmp, VERSION='0.1.0', GITHUB_OUTPUT=str(work / 'outputs'))
+                       RUNNER_TEMP=tmp, VERSION='0.1.0', SOURCE_COMMIT='a' * 40,
+                       GITHUB_OUTPUT=str(work / 'outputs'))
             subprocess.run(['bash', '-euo', 'pipefail', '-c', recipe], cwd=ROOT,
                            env=env, check=True, capture_output=True, text=True)
             for arch in ('amd64', 'arm64'):

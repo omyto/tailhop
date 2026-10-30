@@ -20,6 +20,7 @@ jobs:
       CGO_ENABLED: '1'
     outputs:
       version: ${{ steps.version.outputs.version }}
+      commit: ${{ steps.source.outputs.commit }}
     steps:
       - name: Validate stable version tag
         id: version
@@ -37,6 +38,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Record validated source commit
+        id: source
+        run: printf 'commit=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Check formatting
         run: |
           unformatted=$(gofmt -l ./cmd ./internal)
@@ -71,6 +75,7 @@ jobs:
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.verify.outputs.commit }}
           persist-credentials: false
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:
@@ -86,6 +91,9 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            VERSION=v${{ needs.verify.outputs.version }}
+            COMMIT=${{ needs.verify.outputs.commit }}
           tags: |
             ${{ vars.DOCKERHUB_USERNAME }}/tailhop:${{ needs.verify.outputs.version }}
             ${{ vars.DOCKERHUB_USERNAME }}/tailhop:latest

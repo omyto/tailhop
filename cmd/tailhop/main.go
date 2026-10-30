@@ -27,6 +27,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if cfg.showVersion {
+		fmt.Fprintln(os.Stdout, versionString())
+		return nil
+	}
 	// Snapshot both environment keys before explicit-empty cleanup.
 	secrets := authSecrets(os.Args[1:], os.Getenv)
 	if err := start(cfg, secrets); err != nil {

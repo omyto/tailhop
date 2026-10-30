@@ -16,6 +16,7 @@ type config struct {
 	hostname, stateDir string
 	authKey            string
 	authKeyExplicit    bool
+	showVersion        bool
 	port, maxClients   int
 	idle               time.Duration
 	level              slog.Level
@@ -37,6 +38,7 @@ func (e flagParseError) Unwrap() error { return e.cause }
 func parseConfig(args []string, getenv func(string) string, output io.Writer) (config, error) {
 	fs := flag.NewFlagSet("tailhop", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
+	showVersion := fs.Bool("version", false, "Print version, commit and Go toolchain, then exit")
 	values := make(map[string]*string)
 	for _, setting := range []struct{ flag, env, fallback, usage string }{
 		{"auth-key", "TS_AUTHKEY", "", "Optional initial enrollment key (TS_AUTHKEY); visible in process arguments"},
@@ -69,6 +71,9 @@ func parseConfig(args []string, getenv func(string) string, output io.Writer) (c
 	}
 	if fs.NArg() != 0 {
 		return config{}, fmt.Errorf("positional arguments are not supported")
+	}
+	if *showVersion {
+		return config{showVersion: true}, nil
 	}
 	explicit := make(map[string]bool)
 	fs.Visit(func(f *flag.Flag) { explicit[f.Name] = true })

@@ -21,6 +21,13 @@ go test ./...
 go test -race ./...
 ```
 
+Use `./tailhop --version` to identify the binary's version, commit and Go
+toolchain. Release workflows stamp `main.version` and `main.commit` with linker
+`-X` flags; Linux uses the validated tag's commit, and Docker checks out the
+commit that passed verification. Source builds default to `dev` and use Go's
+embedded VCS revision when available. The Dockerfile accepts optional `VERSION`
+and `COMMIT` build args and defaults to `dev`/`unknown` for local builds.
+
 For the Docker development workflow, build and run from the checkout:
 
 ```sh

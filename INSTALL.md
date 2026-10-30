@@ -96,10 +96,16 @@ extracted directory. Only the systemd administration commands need sudo.
 Inspect flags, then run with defaults or customize the hostname and port:
 
 ```bash
+./tailhop --version
 ./tailhop --help
 ./tailhop
 ./tailhop --hostname tailhop-home --port 8080
 ```
+
+`--version` prints `tailhop <version> (commit <commit>; <Go version>)` and exits
+without reading configuration or starting tsnet. Official release builds embed
+the validated Git tag and commit. Local builds use `dev` and Go's embedded VCS
+revision when available (with `-dirty` for modified source), otherwise `unknown`.
 
 The default state directory is `$XDG_STATE_HOME/tailhop` when `XDG_STATE_HOME`
 is absolute, otherwise `$HOME/.local/state/tailhop`. Tailhop creates it privately

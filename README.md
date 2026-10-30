@@ -65,6 +65,9 @@ configuration, Compose, upgrades, and source development.
 
 ## Run the Linux binary
 
+Use `./tailhop --version` to print the version, source commit and Go toolchain
+without starting the proxy or changing state.
+
 On Linux with systemd, install and start the latest public stable release:
 
 ```sh

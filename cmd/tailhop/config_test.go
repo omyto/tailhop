@@ -173,17 +173,18 @@ func TestCLIExitStatus(t *testing.T) {
 		main()
 		os.Exit(0)
 	}
-	for _, arg := range []string{"--help", "-h", "--max-client=200", "--hostname", "--port=0"} {
+	for _, arg := range []string{"--help", "-h", "--version", "--max-client=200", "--hostname", "--port=0"} {
 		t.Run(arg, func(t *testing.T) {
 			state := t.TempDir() + "/must-not-exist"
 			cmd := exec.Command(os.Args[0], "-test.run=^TestCLIExitStatus$")
 			cmd.Env = append(os.Environ(), "TAILHOP_TEST_CLI=1", "TAILHOP_TEST_ARG="+arg, "TS_AUTHKEY=secret-value", "TS_STATE_DIR="+state, "PROXY_PORT=invalid")
 			out, err := cmd.CombinedOutput()
 			help := arg == "--help" || arg == "-h"
-			if (err == nil) != help {
+			informational := help || arg == "--version"
+			if (err == nil) != informational {
 				t.Fatalf("exit: %v; output: %s", err, out)
 			}
-			if !help {
+			if !informational {
 				var exit *exec.ExitError
 				if !errors.As(err, &exit) || exit.ExitCode() != 1 {
 					t.Fatalf("exit: %v", err)
@@ -194,6 +195,9 @@ func TestCLIExitStatus(t *testing.T) {
 			}
 			if strings.Contains(string(out), "Usage:") != help {
 				t.Fatalf("unexpected usage output: %s", out)
+			}
+			if arg == "--version" && (!strings.Contains(string(out), "tailhop dev (commit ") || strings.Contains(string(out), "tsnet")) {
+				t.Fatalf("unexpected version output: %s", out)
 			}
 			if _, err := os.Stat(state); !os.IsNotExist(err) {
 				t.Fatalf("created state: %v", err)

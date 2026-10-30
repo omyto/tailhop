@@ -85,6 +85,7 @@ jobs:
         id: archives
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
         shell: bash
         run: |
           git diff --exit-code HEAD -- cmd internal go.mod go.sum install.sh LICENSE THIRD_PARTY_NOTICES INSTALL.md packaging/systemd
@@ -99,7 +100,7 @@ jobs:
             stage="$work/$arch"
             mkdir -p "$stage"
             GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build \
-              -trimpath -buildvcs=false -ldflags="-s -w" \
+              -trimpath -buildvcs=false -ldflags="-s -w -X main.version=v${VERSION} -X main.commit=${SOURCE_COMMIT}" \
               -o "$stage/tailhop" ./cmd/tailhop
             test -s "$stage/tailhop"
             chmod 0755 "$stage/tailhop"

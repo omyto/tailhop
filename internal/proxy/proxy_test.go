@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -262,7 +263,8 @@ func TestConnectBufferedHalfClose(t *testing.T) {
 	for _, remoteFirst := range []bool{false, true} {
 		t.Run(fmt.Sprint(remoteFirst), func(t *testing.T) {
 			upstream, remote := tcpPair(t)
-			p := newProxy(testLog(), func(context.Context, string, string) (net.Conn, error) { return upstream, nil })
+			var logs bytes.Buffer
+			p := newProxy(slog.New(slog.NewJSONHandler(&logs, nil)), func(context.Context, string, string) (net.Conn, error) { return upstream, nil })
 			server := proxyServer(t, p)
 			defer server.Close()
 			c, r := connectClient(t, strings.TrimPrefix(server.URL, "http://"), "early")
@@ -302,6 +304,9 @@ func TestConnectBufferedHalfClose(t *testing.T) {
 			defer cancel()
 			if e := p.Shutdown(ctx, server.Config); e != nil {
 				t.Fatal(e)
+			}
+			if strings.Count(logs.String(), `"msg":"tunnel closed"`) != 1 || !strings.Contains(logs.String(), `"reason":"eof"`) || !strings.Contains(logs.String(), `"duration":`) {
+				t.Fatalf("half-close/graceful-drain diagnostic: %s", &logs)
 			}
 		})
 	}
@@ -989,6 +994,106 @@ func TestConnectAndRejectionSourceLogs(t *testing.T) {
 			t.Fatal(got)
 		}
 	})
+}
+
+type readErrorConn struct{ net.Conn }
+
+func (c readErrorConn) Read([]byte) (int, error) {
+	return 0, errors.New("credential-secret body-secret query-secret")
+}
+
+func TestTunnelCloseDiagnostics(t *testing.T) {
+	for _, reason := range []string{"eof", "io_error", "idle_timeout", "shutdown", "handshake_error"} {
+		t.Run(reason, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				var logs bytes.Buffer
+				upstream, remote := net.Pipe()
+				defer remote.Close()
+				var outbound net.Conn = upstream
+				if reason == "io_error" {
+					outbound = readErrorConn{upstream}
+				}
+				p := newProxy(slog.New(slog.NewJSONHandler(&logs, nil)), func(context.Context, string, string) (net.Conn, error) {
+					return outbound, nil
+				})
+				p.idleTimeout = time.Minute
+				server, limited, l, done := pipeProxy(p)
+				client, accepted := net.Pipe()
+				defer client.Close()
+				l.incoming <- sourceConn{accepted}
+				if reason == "handshake_error" {
+					// The server owns a tunnel but cannot flush CONNECT's 200 yet.
+					go fmt.Fprint(client, "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com\r\n\r\n")
+					synctest.Wait()
+					time.Sleep(time.Second)
+					client.Close()
+				} else {
+					response, err := pipeRequest(client, "CONNECT", "example.com:443")
+					if err != nil || response.StatusCode != http.StatusOK {
+						t.Fatalf("CONNECT: %v, %v", response, err)
+					}
+					synctest.Wait()
+					switch reason {
+					case "eof":
+						time.Sleep(time.Second)
+						client.Close()
+					case "idle_timeout":
+						time.Sleep(time.Minute)
+					case "shutdown":
+						ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+						defer cancel()
+						if err := p.Shutdown(ctx, server); !errors.Is(err, context.DeadlineExceeded) {
+							t.Fatalf("forced shutdown: %v", err)
+						}
+					}
+				}
+				synctest.Wait()
+				if countSlots(limited) != 0 {
+					t.Fatal("closed tunnel retained an admission slot")
+				}
+				stopPipeProxy(t, p, server, done)
+				type closeEvent struct {
+					Message  string `json:"msg"`
+					Reason   string `json:"reason"`
+					Duration *int64 `json:"duration"`
+					SourceIP string `json:"source_ip"`
+					Host     string `json:"host"`
+					Port     string `json:"port"`
+				}
+				var closed []closeEvent
+				for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
+					var entry closeEvent
+					if err := json.Unmarshal([]byte(line), &entry); err != nil {
+						t.Fatal(err)
+					}
+					if entry.Message == "tunnel closed" {
+						closed = append(closed, entry)
+					}
+				}
+				if len(closed) != 1 || closed[0].Reason != reason || closed[0].Duration == nil || *closed[0].Duration < 0 {
+					t.Fatalf("close diagnostic: %s", &logs)
+				}
+				entry := closed[0]
+				if entry.SourceIP != "100.64.0.42" || entry.Host != "example.com" || entry.Port != "443" {
+					t.Fatalf("missing trusted destination/source: %s", &logs)
+				}
+				if strings.Contains(logs.String(), "tunnel established") != (reason != "handshake_error") {
+					t.Fatalf("incorrect handshake diagnostic: %s", &logs)
+				}
+				if reason != "io_error" && *entry.Duration != int64(time.Second) && reason != "idle_timeout" {
+					t.Fatalf("unexpected tunnel lifetime: %d", *entry.Duration)
+				}
+				if reason == "idle_timeout" && *entry.Duration != int64(time.Minute) {
+					t.Fatalf("unexpected idle lifetime: %d", *entry.Duration)
+				}
+				for _, secret := range []string{"credential-secret", "body-secret", "query-secret"} {
+					if strings.Contains(logs.String(), secret) {
+						t.Fatal("raw I/O error leaked into logs")
+					}
+				}
+			})
+		})
+	}
 }
 
 func TestLateConnectCannotRegisterAfterShutdown(t *testing.T) {

@@ -20,12 +20,17 @@ type tunnel struct {
 	last             time.Time
 	idle             time.Duration
 	closed           bool
-	expired          bool
+	reason           string
 }
 
-func (t *tunnel) close() {
+func (t *tunnel) close(reason string) {
 	t.mu.Lock()
-	t.closed = true
+	// Claim the cause before closing either peer. Secondary copy errors from
+	// those closes must not overwrite an idle timeout, shutdown, or EOF.
+	if !t.closed {
+		t.closed = true
+		t.reason = reason
+	}
 	if t.timer != nil {
 		t.timer.Stop()
 	}
@@ -64,7 +69,7 @@ func (t *tunnel) expire() {
 		return
 	}
 	t.closed = true
-	t.expired = true
+	t.reason = "idle_timeout"
 	t.mu.Unlock()
 	t.client.Close()
 	t.upstream.Close()
@@ -355,10 +360,18 @@ func (p *Proxy) connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t := &tunnel{client: client, upstream: upstream}
+	started := time.Now()
+	completionReason := "handshake_error"
 	p.tunnels[t] = struct{}{}
 	p.mu.Unlock()
 	defer func() {
-		t.close()
+		// A return before copying finishes means the CONNECT response failed.
+		// An already claimed terminal cause always takes precedence.
+		t.close(completionReason)
+		t.mu.Lock()
+		reason := t.reason
+		t.mu.Unlock()
+		p.log.Info("tunnel closed", "reason", reason, "source_ip", sourceIP(r.RemoteAddr), "host", host, "port", port, "duration", time.Since(started))
 		p.mu.Lock()
 		delete(p.tunnels, t)
 		p.mu.Unlock()
@@ -382,11 +395,15 @@ func (p *Proxy) connect(w http.ResponseWriter, r *http.Request) {
 			if c, ok := dst.(interface{ CloseWrite() error }); ok {
 				e = c.CloseWrite()
 			} else {
-				t.close()
+				t.close("eof")
 			}
 		}
 		if e != nil {
-			t.close()
+			reason := "io_error"
+			if errors.Is(e, errNoHalfClose) {
+				reason = "eof"
+			}
+			t.close(reason)
 		}
 		results <- e
 	}
@@ -394,13 +411,7 @@ func (p *Proxy) connect(w http.ResponseWriter, r *http.Request) {
 	go copyHalf(client, upstream)
 	<-results
 	<-results
-	reason := "closed"
-	t.mu.Lock()
-	if t.expired {
-		reason = "idle_timeout"
-	}
-	t.mu.Unlock()
-	p.log.Info("tunnel closed", "reason", reason, "source_ip", sourceIP(r.RemoteAddr), "host", host, "port", port)
+	completionReason = "eof"
 }
 
 func (p *Proxy) notify() {
@@ -472,7 +483,7 @@ func (p *Proxy) Shutdown(ctx context.Context, s *http.Server) error {
 			}
 			p.mu.Unlock()
 			for _, t := range tunnels {
-				t.close()
+				t.close("shutdown")
 			}
 			for _, c := range clients {
 				c.Close()

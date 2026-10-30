@@ -102,6 +102,7 @@ Use `tsnet.Server.Listen("tcp", fmt.Sprintf(":%d", port))`; don't bind `0.0.0.0`
 - Preserve immediate response flushing per write unless benchmarks and streaming tests demonstrate a better alternative.
 - Exclude stack traces, request bodies, auth keys, and full destination URLs from ordinary logs. Log status, method, duration, validated destination hostname (no query), and the trusted source IP from r.RemoteAddr. Log blocked/failed requests and admission rejections without raw upstream error strings or forwarding-header identity. Do not add per-request WhoIs lookups.
 - Avoid clever abstractions and hidden goroutine lifetimes. The implementation should be easy to audit.
+- Emit one close event per hijacked CONNECT connection, with elapsed time since hijacking and a stable reason: `eof`, `io_error`, `idle_timeout`, `shutdown` (forced drain expiry), or `handshake_error`. Preserve the first cause to claim terminal closure; secondary errors from closing sockets must not replace it. Do not log raw I/O error text.
 
 ## 7. Repository layout (target, not a framework)
 

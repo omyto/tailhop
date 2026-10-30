@@ -129,6 +129,16 @@ At expiry, outbound HTTP operations are canceled and remaining inbound connectio
 
 Structured application logs include source IP from the tsnet connection, method, validated destination hostname, status, and duration as applicable. Forwarding headers are not trusted for identity, and no per-request WhoIs lookup is used. Request bodies, URL queries, proxy credentials, and sensitive header values are excluded.
 
+Each hijacked CONNECT connection emits one `tunnel closed` event with a `duration`
+from hijacking through cleanup (including the CONNECT response, excluding DNS and
+dialing). JSON durations use nanoseconds, as with HTTP request durations. The
+`reason` is `eof` for normal completion or the safe half-close fallback,
+`io_error` for transfer/half-close errors, `idle_timeout` for inactivity,
+`shutdown` for forced closure after the drain budget, or `handshake_error` if
+sending the CONNECT response fails. The first cause to claim closure is retained;
+errors caused by cleanup do not overwrite it. Gracefully drained tunnels keep
+their natural completion reason. Raw I/O error text and payloads are not logged.
+
 The `tailnet ready` event with `state=Running` comes from tsnet's state API,
 including the initial state of an already enrolled node. The installer uses this
 application event to recognize readiness; `proxy listening` alone is not readiness.

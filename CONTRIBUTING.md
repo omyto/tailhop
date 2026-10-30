@@ -76,6 +76,15 @@ the affected dependency or toolchain deliberately; do not ignore the exit status
 Results depend on the database and build configuration at scan time, and do not
 replace the proxy's policy tests or deployment checks.
 
+Both release workflows call this same CI workflow with the immutable commit
+from their validated source checkout. Creating/updating Linux draft assets and
+pushing Docker images require all called jobs to succeed, including fuzzing and
+both vulnerability scans. A failed, canceled or skipped security gate blocks
+publication. Required fuzz targets must exist and load successfully; older tags
+without them fail instead of silently running no fuzz tests. Linux may build a
+private Actions artifact before the gate, but cannot attach it to a release until
+the gate passes. No release credentials are passed to the called workflow.
+
 ## Pull requests
 
 Keep each pull request focused. Explain the problem, the resulting behavior, and

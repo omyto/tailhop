@@ -129,6 +129,14 @@ Add at most one small extra internal Go file if it materially improves clarity. 
 
 ## 8. Deployment requirements
 
+Before creating/updating GitHub draft release assets or pushing Docker images,
+release workflows must pass the shared CI workflow on the exact immutable commit
+used for their payload. This includes all required fuzz targets and govulncheck
+for Linux amd64/arm64. Missing/unloadable fuzz targets, failed scans, cancellation
+or skipped checks must block publication. The security workflow has read-only
+repository access and receives no release credentials. Building a private Actions
+artifact before the gate is permitted; release asset changes are gated.
+
 ### Docker
 
 - Multi-stage Dockerfile: build Go binary in a Go image; run with minimal runtime containing suitable CA roots as required by tsnet networking.

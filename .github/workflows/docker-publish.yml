@@ -55,8 +55,15 @@ jobs:
       - name: Race test
         run: go test -race ./...
 
-  publish:
+  security:
     needs: verify
+    if: needs.verify.outputs.commit != ''
+    uses: ./.github/workflows/ci.yml
+    with:
+      source_commit: ${{ needs.verify.outputs.commit }}
+
+  publish:
+    needs: [verify, security]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:

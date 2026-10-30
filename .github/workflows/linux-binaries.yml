@@ -163,8 +163,15 @@ jobs:
           retention-days: 30
           compression-level: 0
 
-  release:
+  security:
     needs: build
+    if: needs.build.outputs.commit != ''
+    uses: ./.github/workflows/ci.yml
+    with:
+      source_commit: ${{ needs.build.outputs.commit }}
+
+  release:
+    needs: [build, security]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

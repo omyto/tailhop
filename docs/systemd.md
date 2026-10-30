@@ -27,7 +27,7 @@ Start with the bundled [INSTALL.md](../INSTALL.md): it covers direct execution a
 
 ### Prebuilt Linux binary
 
-The binary workflow creates or updates a **GitHub Draft Release** after Go checks, package validation, and archive integrity verification succeed. It never publishes a release. Draft assets are not public downloads; a maintainer must review and publish a verified draft. An authorized maintainer can rebuild the existing tag without changing it:
+The binary workflow creates or updates a **GitHub Draft Release** after Go checks, package validation, archive integrity verification, and the shared CI security gate succeed. The gate checks out the exact commit used to build the archives and requires fuzzing plus Linux amd64/arm64 vulnerability scans to pass. A failure, cancellation, missing fuzz target or skipped gate blocks draft asset changes. A private Actions build artifact may already exist, but is not attached to a release until the gate passes. The workflow never publishes a release. Draft assets are not public downloads; a maintainer must review and publish a verified draft. An authorized maintainer can rebuild the existing tag without changing it:
 
 1. Make [linux-binaries.yml](../.github/workflows/linux-binaries.yml) available on the default branch for manual execution. Choose an existing stable release tag containing `install.sh`, `INSTALL.md`, `LICENSE`, `THIRD_PARTY_NOTICES`, and both systemd packaging files. Everything bundled must come from that tagged source.
 2. Open **Actions → Linux binaries → Run workflow**. Select the default branch as the workflow source and enter the chosen tag in `release_tag`. The workflow checks out and verifies that exact tagged commit before testing/building. Do not repush, move, or recreate tags.

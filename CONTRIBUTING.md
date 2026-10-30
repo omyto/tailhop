@@ -37,6 +37,20 @@ resolvers/dialers and test-local connections: no Tailnet credentials or public
 internet are required after dependencies have been downloaded. Keep test overrides
 out of production policy.
 
+Normal `go test ./...` runs the saved fuzz seeds. CI also runs each security fuzz
+target for ten seconds. For a longer local run, select one target at a time:
+
+```sh
+go test ./internal/proxy -run='^$' -fuzz='^FuzzAuthority$' -fuzztime=1m
+go test ./internal/proxy -run='^$' -fuzz='^FuzzPublicIP$' -fuzztime=1m
+go test ./internal/proxy -run='^$' -fuzz='^FuzzStripHeaders$' -fuzztime=1m
+```
+
+Fuzzing uses no network or credentials. The targets check authority/URL structure,
+allowed ports, non-public address rejection, IPv4-mapped/scoped aliases, and
+hop-by-hop header removal while preserving end-to-end values. If a failure is
+found, retain its generated `testdata/fuzz/` corpus entry as a regression case.
+
 ## Pull requests
 
 Keep each pull request focused. Explain the problem, the resulting behavior, and
